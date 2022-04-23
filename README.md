@@ -30,10 +30,10 @@ Restinfront.config({
   authRequired: true,
   authToken: () => localStorage.get('authToken'),
   onFetchError: (response) => {
-    console.warn('[Modelize][Fetch]', error)
+    console.warn('[Restinfront][Fetch]', error)
   },
   onValidationError: (error) => {
-    console.warn('[Modelize][Validation]', error)
+    console.warn('[Restinfront][Validation]', error)
   }
 })
 
