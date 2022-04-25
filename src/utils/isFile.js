@@ -6,6 +6,6 @@ function isBase64 (value) {
 }
 
 
-export function isFile (value) {
+export default function isFile (value) {
   return isUrl(value) || isBase64(value)
 }
