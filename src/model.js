@@ -440,10 +440,10 @@ class Model {
         options: null,
         request: null,
         response: null,
-        getInProgress: false,
-        getSuccessOnce: false,
-        getSuccess: false,
-        getFailure: false
+        getProgressing: false,
+        getSucceededOnce: false,
+        getSucceeded: false,
+        getFailed: false
       }
     }
 
@@ -452,9 +452,9 @@ class Model {
       // Add single item specific properties
       this.$restinfront.isNew = options.isNew
       this.$restinfront.validator = this.constructor.#buildValidator()
-      this.$restinfront.saveInProgress = false
-      this.$restinfront.saveSuccess = false
-      this.$restinfront.saveFailure = false
+      this.$restinfront.saveProgressing = false
+      this.$restinfront.saveSucceeded = false
+      this.$restinfront.saveFailed = false
 
       // Build a raw item if it's a new instance
       if (
@@ -512,32 +512,32 @@ class Model {
     return this.$restinfront.isNew
   }
 
-  get getInProgress () {
-    return this.$restinfront.fetch.getInProgress
+  get getProgressing () {
+    return this.$restinfront.fetch.getProgressing
   }
 
-  get getSuccessOnce () {
-    return this.$restinfront.fetch.getSuccessOnce
+  get getSucceededOnce () {
+    return this.$restinfront.fetch.getSucceededOnce
   }
 
-  get getSuccess () {
-    return this.$restinfront.fetch.getSuccess
+  get getSucceeded () {
+    return this.$restinfront.fetch.getSucceeded
   }
 
-  get getFailure () {
-    return this.$restinfront.fetch.getFailure
+  get getFailed () {
+    return this.$restinfront.fetch.getFailed
   }
 
-  get saveInProgress () {
-    return this.$restinfront.fetch.saveInProgress
+  get saveProgressing () {
+    return this.$restinfront.fetch.saveProgressing
   }
 
-  get saveSuccess () {
-    return this.$restinfront.fetch.saveSuccess
+  get saveSucceeded () {
+    return this.$restinfront.fetch.saveSucceeded
   }
 
-  get saveFailure () {
-    return this.$restinfront.fetch.saveFailure
+  get saveFailed () {
+    return this.$restinfront.fetch.saveFailed
   }
 
   /**
@@ -734,9 +734,9 @@ class Model {
    */
   valid (fieldlist) {
     // Reset save states
-    this.$restinfront.fetch.saveInProgress = false
-    this.$restinfront.fetch.saveFailure = false
-    this.$restinfront.fetch.saveSuccess = false
+    this.$restinfront.fetch.saveProgressing = false
+    this.$restinfront.fetch.saveFailed = false
+    this.$restinfront.fetch.saveSucceeded = false
     // Proceed to deep validation
     const errors = this.#getValidationErrors(fieldlist)
     const isValid = errors === null
@@ -776,13 +776,13 @@ class Model {
 
     // Set states to inprogress
     if (options.method === 'GET') {
-      this.$restinfront.fetch.getInProgress = true
-      this.$restinfront.fetch.getFailure = false
-      this.$restinfront.fetch.getSuccess = false
+      this.$restinfront.fetch.getProgressing = true
+      this.$restinfront.fetch.getFailed = false
+      this.$restinfront.fetch.getSucceeded = false
     } else {
-      this.$restinfront.fetch.saveInProgress = true
-      this.$restinfront.fetch.saveFailure = false
-      this.$restinfront.fetch.saveSuccess = false
+      this.$restinfront.fetch.saveProgressing = true
+      this.$restinfront.fetch.saveFailed = false
+      this.$restinfront.fetch.saveSucceeded = false
     }
 
     // Allow fetch request to be aborted
@@ -817,11 +817,11 @@ class Model {
 
       // Set states to failure
       if (options.method === 'GET') {
-        this.$restinfront.fetch.getInProgress = false
-        this.$restinfront.fetch.getFailure = true
+        this.$restinfront.fetch.getProgressing = false
+        this.$restinfront.fetch.getFailed = true
       } else {
-        this.$restinfront.saveInProgress = false
-        this.$restinfront.saveFailure = true
+        this.$restinfront.saveProgressing = false
+        this.$restinfront.saveFailed = true
       }
 
       return Promise.resolve(this)
@@ -845,12 +845,12 @@ class Model {
 
     // Set states to success
     if (options.method === 'GET') {
-      this.$restinfront.fetch.getInProgress = false
-      this.$restinfront.fetch.getSuccess = true
-      this.$restinfront.fetch.getSuccessOnce = true
+      this.$restinfront.fetch.getProgressing = false
+      this.$restinfront.fetch.getSucceeded = true
+      this.$restinfront.fetch.getSucceededOnce = true
     } else {
-      this.$restinfront.fetch.saveInProgress = false
-      this.$restinfront.fetch.saveSuccess = true
+      this.$restinfront.fetch.saveProgressing = false
+      this.$restinfront.fetch.saveSucceeded = true
     }
 
     return Promise.resolve(this)
