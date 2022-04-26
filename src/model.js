@@ -11,116 +11,8 @@ const COLLECTION_SYMBOL = Symbol.for('collection')
 
 
 class Model {
-  /*****************************************************************
-  * Fetch helpers
-  *****************************************************************/
-
-  static #buildRequestUrl ({ pathname, searchParams }) {
-    let requestUrl = joinPaths(this.requestUrl, pathname)
-
-    if (searchParams) {
-      requestUrl += `?${
-        Object.entries(searchParams)
-          .filter(([key, value]) => value !== undefined)
-          .map(([key, value]) => {
-            if (isDate(value)) {
-              value = value.toISOString()
-            }
-            return `${key}=${encodeURIComponent(value)}`
-          })
-          .join('&')
-      }`
-    }
-
-    return requestUrl
-  }
-
-  static async #buildRequestInit (data, options = {}) {
-    const requestInit = {
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      ...options
-    }
-
-    // Set Authorization header for private api
-    if (this.authRequired) {
-      const token = await this.authToken()
-
-      if (!token) {
-        throw new Error(`[Restinfront][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
-      }
-
-      requestInit.headers['Authorization'] = `Bearer ${token}`
-    }
-
-    if (['POST', 'PUT', 'PATCH'].includes(requestInit.method)) {
-      // Extract validated data only
-      requestInit.body = data.toJSON({ removeInvalid: true })
-    }
-
-    return requestInit
-  }
-
-  static #hasMatchedCollectionPattern (serverData) {
-    return (
-      has(serverData, this.collectionCountKey) &&
-      has(serverData, this.collectionDataKey)
-    )
-  }
-
-  /*****************************************************************
-  * Format data before use in front
-  *****************************************************************/
-
-  static buildRawItem (item = {}) {
-    const rawItem = {}
-
-    // Build the item with default values
-    const primaryKey = item['primaryKey'] || item[this.primaryKeyFieldname] || this.schema[this.primaryKeyFieldname].defaultValue()
-
-    for (const fieldname in this.schema) {
-      if (fieldname === this.primaryKeyFieldname) {
-        rawItem[fieldname] = primaryKey
-      } else if (has(item, fieldname)) {
-        rawItem[fieldname] = item[fieldname]
-      } else {
-        rawItem[fieldname] = this.schema[fieldname].defaultValue(primaryKey) // primaryKey argument is necessary for HASONE datatype
-      }
-    }
-
-    return rawItem
-  }
-
-  static #buildValidator () {
-    const validator = {}
-
-    // Build the base validator
-    for (const fieldname in this.schema) {
-      const fieldconf = this.schema[fieldname]
-
-      validator[fieldname] = {
-        checked: fieldconf.autoChecked,
-        isValid: (value, data) => {
-          const isBlank = fieldconf.type.isBlank(value)
-
-          return (
-            (
-              // Blank and allowed
-              (isBlank && fieldconf.allowBlank(value, data)) ||
-              // Not blank and valid
-              (!isBlank && fieldconf.type.isValid(value))
-            ) &&
-            // Custom valid method
-            fieldconf.isValid(value, data)
-          )
-        }
-      }
-    }
-
-    return validator
-  }
+  #configured = false
+  #collectionKey = 'collection'
 
   /*****************************************************************
   * Static: Public API
@@ -133,9 +25,6 @@ class Model {
     if (options.authRequired && !options.authToken) {
       throw new Error(`[Restinfront][Config] \`authToken\` is required if \`authRequired\` is enabled`)
     }
-
-    this.#configured = true
-    this.#collectionKey = 'collection'
 
     this.baseUrl = options.baseUrl
     this.endpoint = ''
@@ -235,12 +124,66 @@ class Model {
       throw new Error(`[Restinfront][${this.name}] \`primaryKey\` is missing`)
     }
 
+    this.#configured = true
+
     return this
   }
 
   /*****************************************************************
   * Instance: Private API
   *****************************************************************/
+
+  /*****************************************************************
+  * Format data before use in front
+  *****************************************************************/
+
+  static buildRawItem (item = {}) {
+    const rawItem = {}
+
+    // Build the item with default values
+    const primaryKey = item['primaryKey'] || item[this.primaryKeyFieldname] || this.schema[this.primaryKeyFieldname].defaultValue()
+
+    for (const fieldname in this.schema) {
+      if (fieldname === this.primaryKeyFieldname) {
+        rawItem[fieldname] = primaryKey
+      } else if (has(item, fieldname)) {
+        rawItem[fieldname] = item[fieldname]
+      } else {
+        rawItem[fieldname] = this.schema[fieldname].defaultValue(primaryKey) // primaryKey argument is necessary for HASONE datatype
+      }
+    }
+
+    return rawItem
+  }
+
+  static #buildValidator () {
+    const validator = {}
+
+    // Build the base validator
+    for (const fieldname in this.schema) {
+      const fieldconf = this.schema[fieldname]
+
+      validator[fieldname] = {
+        checked: fieldconf.autoChecked,
+        isValid: (value, data) => {
+          const isBlank = fieldconf.type.isBlank(value)
+
+          return (
+            (
+              // Blank and allowed
+              (isBlank && fieldconf.allowBlank(value, data)) ||
+              // Not blank and valid
+              (!isBlank && fieldconf.type.isValid(value))
+            ) &&
+            // Custom valid method
+            fieldconf.isValid(value, data)
+          )
+        }
+      }
+    }
+
+    return validator
+  }
 
   /**
    * Throw an error if the instance is not a collection
@@ -336,99 +279,8 @@ class Model {
   }
 
   /**
-   * Define the callback for custom collection methods
-   */
-  #getCollectionCallback (ref) {
-    return isFunction(ref)
-      ? ref
-      : isString(ref)
-        ? (item) => item[this.constructor.primaryKeyFieldname] === ref
-        : (item) => item[this.constructor.primaryKeyFieldname] === ref[this.constructor.primaryKeyFieldname]
-  }
-
-  /**
-   * Valid a list of fields
-   * @param {array} fieldlist list of fieldname
-   * @return {object} errors
-   */
-  #getValidationErrors (fieldlist) {
-    if (!isArray(fieldlist)) {
-      throw new Error(`[Restinfront][Validation] .valid() params must be an array`)
-    }
-
-    let errors = null
-
-    const mergeErrors = (fieldname, error) => {
-      if (error) {
-        if (!errors) {
-          errors = {}
-        }
-        errors[fieldname] = error
-      }
-    }
-
-    // Check user defined validation
-    for (const fielditem of fieldlist) {
-      // Validation for direct fields
-      if (isString(fielditem)) {
-        const fieldname = fielditem
-
-        if (has(this, fieldname)) {
-          this.$restinfront.validator[fieldname].checked = true
-
-          if (this.$restinfront.validator[fieldname].isValid(this[fieldname], this) === false) {
-            mergeErrors(fieldname, {
-              value: this[fieldname],
-              error: 'NOT_VALID'
-            })
-          }
-        } else {
-          mergeErrors(fieldname, {
-            error: 'NOT_FOUND'
-          })
-        }
-      // Recursive validation for associations
-      } else if (isArray(fielditem)) {
-        const fieldname = fielditem[0]
-        const fieldlist = fielditem[1]
-
-        if (has(this, fieldname)) {
-          this.$restinfront.validator[fieldname].checked = true
-          mergeErrors(fieldname, this.#getValidationErrors([fieldname]))
-
-          if (fieldlist) {
-            switch (this.constructor.schema[fieldname].type.association) {
-              case 'BelongsTo':
-              case 'HasOne':
-                if (this[fieldname] !== null) {
-                  mergeErrors(fieldname, this[fieldname].#getValidationErrors(fieldlist))
-                }
-                break
-              case 'HasMany':
-                // Check if each item of the collection is valid
-                this[fieldname].forEach(item => {
-                  mergeErrors(fieldname, item.#getValidationErrors(fieldlist))
-                })
-                break
-            }
-          }
-        } else {
-          mergeErrors(fieldname, {
-            error: 'NOT_FOUND'
-          })
-        }
-      } else {
-        throw new Error('[Restinfront][Validation] Syntax error')
-      }
-    }
-
-    return errors
-  }
-
-  /*****************************************************************
-  * Instance: Public API
-  *****************************************************************/
-
+  * Build instance item
+  */
   constructor (data, options = {}) {
     options = {
       isNew: true,
@@ -475,7 +327,7 @@ class Model {
     // Format a collection of items
     } else if (isArray(data)) {
       // Add collection of items specific properties
-      this.$restinfront.count = 0 
+      this.$restinfront.count = 0
 
       Object.defineProperty(this.$restinfront, COLLECTION_SYMBOL, {
         value: true,
@@ -544,7 +396,7 @@ class Model {
    * Convert instance to JSON string
    */
   toJSON (options = {}) {
-    return JSON.stringify(this.#beforeSave(options))
+    return JSON.stringify(this.beforeSave(options))
   }
 
   /**
@@ -557,6 +409,17 @@ class Model {
   /*****************************************************************
   * Collection methods
   *****************************************************************/
+
+  /**
+   * Define the callback for custom collection methods
+   */
+  static #getCollectionCallback (ref) {
+    return isFunction(ref)
+      ? ref
+      : isString(ref)
+        ? (item) => item[this.primaryKeyFieldname] === ref
+        : (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
+  }
 
   /**
    * Get the list of items
@@ -670,7 +533,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   find (ref) {
-    return this.items().find(this.#getCollectionCallback(ref)) || null
+    return this.items().find(this.constructor.#getCollectionCallback(ref)) || null
   }
 
   /**
@@ -678,7 +541,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   exists (ref) {
-    return this.items().some(this.#getCollectionCallback(ref))
+    return this.items().some(this.constructor.#getCollectionCallback(ref))
   }
 
   /**
@@ -686,7 +549,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   remove (ref) {
-    const indexToRemove = this.items().findIndex(this.#getCollectionCallback(ref))
+    const indexToRemove = this.items().findIndex(this.constructor.#getCollectionCallback(ref))
 
     if (indexToRemove === -1) {
       return null
@@ -727,6 +590,89 @@ class Model {
     }
   }
 
+  /*****************************************************************
+  * Validation
+  *****************************************************************/
+
+  /**
+   * Valid a list of fields
+   * @param {array} fieldlist list of fieldname
+   * @return {object} errors
+   */
+  getValidationErrors (fieldlist) {
+    if (!isArray(fieldlist)) {
+      throw new Error(`[Restinfront][Validation] .valid() params must be an array`)
+    }
+
+    let errors = null
+
+    const mergeErrors = (fieldname, error) => {
+      if (error) {
+        if (!errors) {
+          errors = {}
+        }
+        errors[fieldname] = error
+      }
+    }
+
+    // Check user defined validation
+    for (const fielditem of fieldlist) {
+      // Validation for direct fields
+      if (isString(fielditem)) {
+        const fieldname = fielditem
+
+        if (has(this, fieldname)) {
+          this.$restinfront.validator[fieldname].checked = true
+
+          if (this.$restinfront.validator[fieldname].isValid(this[fieldname], this) === false) {
+            mergeErrors(fieldname, {
+              value: this[fieldname],
+              error: 'NOT_VALID'
+            })
+          }
+        } else {
+          mergeErrors(fieldname, {
+            error: 'NOT_FOUND'
+          })
+        }
+      // Recursive validation for associations
+      } else if (isArray(fielditem)) {
+        const fieldname = fielditem[0]
+        const fieldlist = fielditem[1]
+
+        if (has(this, fieldname)) {
+          this.$restinfront.validator[fieldname].checked = true
+          mergeErrors(fieldname, this.getValidationErrors([fieldname]))
+
+          if (fieldlist) {
+            switch (this.constructor.schema[fieldname].type.association) {
+              case 'BelongsTo':
+              case 'HasOne':
+                if (this[fieldname] !== null) {
+                  mergeErrors(fieldname, this[fieldname].getValidationErrors(fieldlist))
+                }
+                break
+              case 'HasMany':
+                // Check if each item of the collection is valid
+                this[fieldname].forEach(item => {
+                  mergeErrors(fieldname, item.getValidationErrors(fieldlist))
+                })
+                break
+            }
+          }
+        } else {
+          mergeErrors(fieldname, {
+            error: 'NOT_FOUND'
+          })
+        }
+      } else {
+        throw new Error('[Restinfront][Validation] Syntax error')
+      }
+    }
+
+    return errors
+  }
+
   /**
    * Valid a list of fields
    * @param {array} fieldlist list of fieldname
@@ -738,7 +684,7 @@ class Model {
     this.$restinfront.fetch.saveFailed = false
     this.$restinfront.fetch.saveSucceeded = false
     // Proceed to deep validation
-    const errors = this.#getValidationErrors(fieldlist)
+    const errors = this.getValidationErrors(fieldlist)
     const isValid = errors === null
 
     if (!isValid) {
@@ -762,6 +708,61 @@ class Model {
   /*****************************************************************
   * HTTP
   *****************************************************************/
+
+  static #hasMatchedCollectionPattern (serverData) {
+    return (
+      has(serverData, this.collectionCountKey) &&
+      has(serverData, this.collectionDataKey)
+    )
+  }
+
+  static #buildRequestUrl ({ pathname, searchParams }) {
+    let requestUrl = joinPaths(this.requestUrl, pathname)
+
+    if (searchParams) {
+      requestUrl += `?${
+        Object.entries(searchParams)
+          .filter(([key, value]) => value !== undefined)
+          .map(([key, value]) => {
+            if (isDate(value)) {
+              value = value.toISOString()
+            }
+            return `${key}=${encodeURIComponent(value)}`
+          })
+          .join('&')
+      }`
+    }
+
+    return requestUrl
+  }
+
+  static async #buildRequestInit (data, options = {}) {
+    const requestInit = {
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      ...options
+    }
+
+    // Set Authorization header for private api
+    if (this.authRequired) {
+      const token = await this.authToken()
+
+      if (!token) {
+        throw new Error(`[Restinfront][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
+      }
+
+      requestInit.headers['Authorization'] = `Bearer ${token}`
+    }
+
+    if (['POST', 'PUT', 'PATCH'].includes(requestInit.method)) {
+      // Extract validated data only
+      requestInit.body = data.toJSON({ removeInvalid: true })
+    }
+
+    return requestInit
+  }
 
   /**
    * Proceed to the HTTP request

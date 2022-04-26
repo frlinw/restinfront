@@ -1,7 +1,7 @@
 {
   "private": false,
   "name": "restinfront",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Model based REST Api Manager",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
