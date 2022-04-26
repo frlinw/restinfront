@@ -6,7 +6,9 @@ Retrieve, parse, valid, transform and save data.
 
 ## Installation
 
-`npm install restinfront`
+```sh
+npm install restinfront
+```
 
 ## Usage
 

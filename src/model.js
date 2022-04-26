@@ -15,7 +15,7 @@ class Model {
   * Fetch helpers
   *****************************************************************/
 
-  static _buildRequestUrl ({ pathname, searchParams }) {
+  static #buildRequestUrl ({ pathname, searchParams }) {
     let requestUrl = joinPaths(this.requestUrl, pathname)
 
     if (searchParams) {
@@ -35,7 +35,7 @@ class Model {
     return requestUrl
   }
 
-  static async _buildRequestInit (data, options = {}) {
+  static async #buildRequestInit (data, options = {}) {
     const requestInit = {
       mode: 'cors',
       headers: {
@@ -49,7 +49,7 @@ class Model {
       const token = await this.authToken()
 
       if (!token) {
-        throw new Error(`[Modelize][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
+        throw new Error(`[Restinfront][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
       }
 
       requestInit.headers['Authorization'] = `Bearer ${token}`
@@ -63,7 +63,7 @@ class Model {
     return requestInit
   }
 
-  static _hasMatchedCollectionPattern (serverData) {
+  static #hasMatchedCollectionPattern (serverData) {
     return (
       has(serverData, this.collectionCountKey) &&
       has(serverData, this.collectionDataKey)
@@ -74,7 +74,7 @@ class Model {
   * Format data before use in front
   *****************************************************************/
 
-  static _buildRawItem (item = {}) {
+  static buildRawItem (item = {}) {
     const rawItem = {}
 
     // Build the item with default values
@@ -93,7 +93,7 @@ class Model {
     return rawItem
   }
 
-  static _buildValidator () {
+  static #buildValidator () {
     const validator = {}
 
     // Build the base validator
@@ -128,14 +128,14 @@ class Model {
 
   static config (options = {}) {
     if (!options.baseUrl) {
-      throw new Error(`[Modelize][Config] \`baseUrl\` is required`)
+      throw new Error(`[Restinfront][Config] \`baseUrl\` is required`)
     }
     if (options.authRequired && !options.authToken) {
-      throw new Error(`[Modelize][Config] \`authToken\` is required if \`authRequired\` is enabled`)
+      throw new Error(`[Restinfront][Config] \`authToken\` is required if \`authRequired\` is enabled`)
     }
 
-    this._configured = true
-    this._collectionKey = 'collection'
+    this.#configured = true
+    this.#collectionKey = 'collection'
 
     this.baseUrl = options.baseUrl
     this.endpoint = ''
@@ -157,11 +157,11 @@ class Model {
   }
 
   static init (schema, options = {}) {
-    if (!this._configured) {
-      throw new Error(`[Modelize][${this.name}] Model.config() must be called before ${this.name}.init()`)
+    if (!this.#configured) {
+      throw new Error(`[Restinfront][${this.name}] Model.config() must be called before ${this.name}.init()`)
     }
     if (options.authRequired && !options.authToken) {
-      throw new Error(`[Modelize][${this.name}] \`authToken\` is required if \`authRequired\` is enabled`)
+      throw new Error(`[Restinfront][${this.name}] \`authToken\` is required if \`authRequired\` is enabled`)
     }
 
     // Override global config
@@ -193,7 +193,7 @@ class Model {
 
       // Type is a required param
       if (!('type' in fieldconf)) {
-        throw new Error(`[Modelize][${this.name}] \`type\` is missing on field '${fieldname}'`)
+        throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
       }
 
       // Set the primary key
@@ -232,7 +232,7 @@ class Model {
       this.primaryKeyRequired &&
       this.primaryKeyFieldname === null
     ) {
-      throw new Error(`[Modelize][${this.name}] \`primaryKey\` is missing`)
+      throw new Error(`[Restinfront][${this.name}] \`primaryKey\` is missing`)
     }
 
     return this
@@ -245,54 +245,54 @@ class Model {
   /**
    * Throw an error if the instance is not a collection
    */
-  _allowCollection () {
+  #allowCollection () {
     if (!this.isCollection) {
-      throw new Error('[Modelize] Cannot use a collection method on a single item instance')
+      throw new Error('[Restinfront] Cannot use a collection method on a single item instance')
     }
   }
 
   /**
    * Throw an error if the instance is not a single item
    */
-  _allowSingleItem () {
+  #allowSingleItem () {
     if (this.isCollection) {
-      throw new Error('[Modelize] Cannot use a single item method on a collection instance')
+      throw new Error('[Restinfront] Cannot use a single item method on a collection instance')
     }
   }
 
   /**
    * Set the list of items
    */
-  _setCollection (newCollection) {
-    this[this.constructor._collectionKey] = newCollection
+  #setCollection (newCollection) {
+    this[this.constructor.#collectionKey] = newCollection
   }
 
   /**
    * Update the current model instance with new data
    */
-  _mutateData (newData) {
+  mutateData (newData) {
     if (newData.isCollection) {
       // Extend the list or just replace it
-      if (this.$modelize.fetch?.options?.extend) {
+      if (this.$restinfront.fetch?.options?.extend) {
         newData.forEach(newItem => this.add(newItem))
       } else {
-        this._setCollection(newData.items())
+        this.#setCollection(newData.items())
       }
 
-      this.$modelize.count = newData.$modelize.count
+      this.$restinfront.count = newData.$restinfront.count
     } else {
       Object.keys(newData).forEach(key => {
         const value = newData[key]
 
         // Mutate only some keys
-        if (key === '$modelize') {
+        if (key === '$restinfront') {
           this[key].isNew = value.isNew
         // Recursive mutation
         } else if (
           this[key] instanceof Model &&
           value instanceof Model
         ) {
-          this[key]._mutateData(value)
+          this[key].mutateData(value)
         // Basic fields
         } else {
           this[key] = value
@@ -304,23 +304,23 @@ class Model {
   /**
    * Format collections and objects to use in back
    */
-  _beforeSave (options) {
+  beforeSave (options) {
     if (this.isCollection) {
-      return this.map(item => item._beforeSaveItem(options))
+      return this.map(item => item.beforeSaveItem(options))
     } else {
-      return this._beforeSaveItem(options)
+      return this.beforeSaveItem(options)
     }
   }
 
   /**
    * Format data recursively based on schema definition
    */
-  _beforeSaveItem (options) {
-    const removeInvalid = options && options.removeInvalid
+  beforeSaveItem (options) {
+    const removeInvalid = options?.removeInvalid
     const newItem = {}
 
-    for (const fieldname in this.$modelize.validator) {
-      const validator = this.$modelize.validator[fieldname]
+    for (const fieldname in this.$restinfront.validator) {
+      const validator = this.$restinfront.validator[fieldname]
       const value = this[fieldname]
 
       if (removeInvalid) {
@@ -338,7 +338,7 @@ class Model {
   /**
    * Define the callback for custom collection methods
    */
-  _getCollectionCallback (ref) {
+  #getCollectionCallback (ref) {
     return isFunction(ref)
       ? ref
       : isString(ref)
@@ -351,9 +351,9 @@ class Model {
    * @param {array} fieldlist list of fieldname
    * @return {object} errors
    */
-  _getValidationErrors (fieldlist) {
+  #getValidationErrors (fieldlist) {
     if (!isArray(fieldlist)) {
-      throw new Error(`[Modelize][Validation] .valid() params must be an array`)
+      throw new Error(`[Restinfront][Validation] .valid() params must be an array`)
     }
 
     let errors = null
@@ -374,9 +374,9 @@ class Model {
         const fieldname = fielditem
 
         if (has(this, fieldname)) {
-          this.$modelize.validator[fieldname].checked = true
+          this.$restinfront.validator[fieldname].checked = true
 
-          if (this.$modelize.validator[fieldname].isValid(this[fieldname], this) === false) {
+          if (this.$restinfront.validator[fieldname].isValid(this[fieldname], this) === false) {
             mergeErrors(fieldname, {
               value: this[fieldname],
               error: 'NOT_VALID'
@@ -393,21 +393,21 @@ class Model {
         const fieldlist = fielditem[1]
 
         if (has(this, fieldname)) {
-          this.$modelize.validator[fieldname].checked = true
-          mergeErrors(fieldname, this._getValidationErrors([fieldname]))
+          this.$restinfront.validator[fieldname].checked = true
+          mergeErrors(fieldname, this.#getValidationErrors([fieldname]))
 
           if (fieldlist) {
             switch (this.constructor.schema[fieldname].type.association) {
               case 'BelongsTo':
               case 'HasOne':
                 if (this[fieldname] !== null) {
-                  mergeErrors(fieldname, this[fieldname]._getValidationErrors(fieldlist))
+                  mergeErrors(fieldname, this[fieldname].#getValidationErrors(fieldlist))
                 }
                 break
               case 'HasMany':
                 // Check if each item of the collection is valid
                 this[fieldname].forEach(item => {
-                  mergeErrors(fieldname, item._getValidationErrors(fieldlist))
+                  mergeErrors(fieldname, item.#getValidationErrors(fieldlist))
                 })
                 break
             }
@@ -418,7 +418,7 @@ class Model {
           })
         }
       } else {
-        throw new Error('[Modelize][Validation] Syntax error')
+        throw new Error('[Restinfront][Validation] Syntax error')
       }
     }
 
@@ -435,29 +435,33 @@ class Model {
       ...options
     }
 
+    this.$restinfront = {
+      fetch: {
+        options: null,
+        request: null,
+        response: null,
+        getInProgress: false,
+        getSuccessOnce: false,
+        getSuccess: false,
+        getFailure: false
+      }
+    }
+
     // Format an item
     if (isObject(data)) {
-      // Add modelize specific infos
-      this.$modelize = {
-        isNew: options.isNew,
-        validator: this.constructor._buildValidator(),
-        states: {
-          fetchInProgress: false,
-          fetchSuccessOnce: false,
-          fetchSuccess: false,
-          fetchFailure: false,
-          saveInProgress: false,
-          saveSuccess: false,
-          saveFailure: false
-        }
-      }
+      // Add single item specific properties
+      this.$restinfront.isNew = options.isNew
+      this.$restinfront.validator = this.constructor.#buildValidator()
+      this.$restinfront.saveInProgress = false
+      this.$restinfront.saveSuccess = false
+      this.$restinfront.saveFailure = false
 
       // Build a raw item if it's a new instance
       if (
-        this.$modelize.isNew &&
+        this.$restinfront.isNew &&
         this.constructor.buildRawItemOnNew
       ) {
-        data = this.constructor._buildRawItem(data)
+        data = this.constructor.buildRawItem(data)
       }
 
       // Format recursively existing fields only
@@ -470,18 +474,10 @@ class Model {
       }
     // Format a collection of items
     } else if (isArray(data)) {
-      // Add modelize specific infos
-      this.$modelize = {
-        count: 0,
-        states: {
-          fetchInProgress: false,
-          fetchSuccessOnce: false,
-          fetchSuccess: false,
-          fetchFailure: false
-        }
-      }
+      // Add collection of items specific properties
+      this.$restinfront.count = 0 
 
-      Object.defineProperty(this.$modelize, COLLECTION_SYMBOL, {
+      Object.defineProperty(this.$restinfront, COLLECTION_SYMBOL, {
         value: true,
         writable: false,
         configurable: false,
@@ -489,7 +485,7 @@ class Model {
       })
 
       // Add items to the list
-      this._setCollection([])
+      this.#setCollection([])
       for (const item of data) {
         this.add(item, options)
       }
@@ -497,7 +493,7 @@ class Model {
       // Update the count with the grand total
       // Note: must be after .add() processing
       if (has(options, 'count')) {
-        this.$modelize.count = options.count
+        this.$restinfront.count = options.count
       }
     }
 
@@ -509,46 +505,46 @@ class Model {
    */
 
   get isCollection () {
-    return COLLECTION_SYMBOL in this.$modelize
+    return COLLECTION_SYMBOL in this.$restinfront
   }
 
   get isNew () {
-    return this.$modelize.isNew
+    return this.$restinfront.isNew
   }
 
-  get fetchInProgress () {
-    return this.$modelize.states.fetchInProgress
+  get getInProgress () {
+    return this.$restinfront.fetch.getInProgress
   }
 
-  get fetchSuccessOnce () {
-    return this.$modelize.states.fetchSuccessOnce
+  get getSuccessOnce () {
+    return this.$restinfront.fetch.getSuccessOnce
   }
 
-  get fetchSuccess () {
-    return this.$modelize.states.fetchSuccess
+  get getSuccess () {
+    return this.$restinfront.fetch.getSuccess
   }
 
-  get fetchFailure () {
-    return this.$modelize.states.fetchFailure
+  get getFailure () {
+    return this.$restinfront.fetch.getFailure
   }
 
   get saveInProgress () {
-    return this.$modelize.states.saveInProgress
+    return this.$restinfront.fetch.saveInProgress
   }
 
   get saveSuccess () {
-    return this.$modelize.states.saveSuccess
+    return this.$restinfront.fetch.saveSuccess
   }
 
   get saveFailure () {
-    return this.$modelize.states.saveFailure
+    return this.$restinfront.fetch.saveFailure
   }
 
   /**
    * Convert instance to JSON string
    */
   toJSON (options = {}) {
-    return JSON.stringify(this._beforeSave(options))
+    return JSON.stringify(this.#beforeSave(options))
   }
 
   /**
@@ -566,8 +562,8 @@ class Model {
    * Get the list of items
    */
   items () {
-    this._allowCollection()
-    return this[this.constructor._collectionKey]
+    this.#allowCollection()
+    return this[this.constructor.#collectionKey]
   }
 
   /**
@@ -588,7 +584,7 @@ class Model {
    * The collection can be extended with more items
    */
   get hasMore () {
-    return this.length < this.$modelize.count
+    return this.length < this.$restinfront.count
   }
 
   /**
@@ -674,7 +670,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   find (ref) {
-    return this.items().find(this._getCollectionCallback(ref)) || null
+    return this.items().find(this.#getCollectionCallback(ref)) || null
   }
 
   /**
@@ -682,7 +678,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   exists (ref) {
-    return this.items().some(this._getCollectionCallback(ref))
+    return this.items().some(this.#getCollectionCallback(ref))
   }
 
   /**
@@ -690,13 +686,13 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   remove (ref) {
-    const indexToRemove = this.items().findIndex(this._getCollectionCallback(ref))
+    const indexToRemove = this.items().findIndex(this.#getCollectionCallback(ref))
 
     if (indexToRemove === -1) {
       return null
     }
 
-    this.$modelize.count = this.$modelize.count - 1
+    this.$restinfront.count = this.$restinfront.count - 1
 
     return this.items().splice(indexToRemove, 1)
   }
@@ -712,7 +708,7 @@ class Model {
 
     this.items().push(instance)
 
-    this.$modelize.count = this.$modelize.count + 1
+    this.$restinfront.count = this.$restinfront.count + 1
 
     return instance
   }
@@ -738,11 +734,11 @@ class Model {
    */
   valid (fieldlist) {
     // Reset save states
-    this.$modelize.states.saveInProgress = false
-    this.$modelize.states.saveFailure = false
-    this.$modelize.states.saveSuccess = false
+    this.$restinfront.fetch.saveInProgress = false
+    this.$restinfront.fetch.saveFailure = false
+    this.$restinfront.fetch.saveSuccess = false
     // Proceed to deep validation
-    const errors = this._getValidationErrors(fieldlist)
+    const errors = this.#getValidationErrors(fieldlist)
     const isValid = errors === null
 
     if (!isValid) {
@@ -758,8 +754,8 @@ class Model {
    */
   error (fieldname) {
     return (
-      this.$modelize.validator[fieldname].checked &&
-      !this.$modelize.validator[fieldname].isValid(this[fieldname], this)
+      this.$restinfront.validator[fieldname].checked &&
+      !this.$restinfront.validator[fieldname].isValid(this[fieldname], this)
     )
   }
 
@@ -772,36 +768,32 @@ class Model {
    */
   async fetch (options) {
     if (!this.constructor.endpoint) {
-      throw new Error(`[Modelize][Fetch] \`endpoint\` is required to perform a request`)
+      throw new Error(`[Restinfront][Fetch] \`endpoint\` is required to perform a request`)
     }
 
     // Save fetch details
-    this.$modelize.fetch = {
-      options: options,
-      request: null,
-      response: null
-    }
+    this.$restinfront.fetch.options = options
 
     // Set states to inprogress
     if (options.method === 'GET') {
-      this.$modelize.states.fetchInProgress = true
-      this.$modelize.states.fetchFailure = false
-      this.$modelize.states.fetchSuccess = false
+      this.$restinfront.fetch.getInProgress = true
+      this.$restinfront.fetch.getFailure = false
+      this.$restinfront.fetch.getSuccess = false
     } else {
-      this.$modelize.states.saveInProgress = true
-      this.$modelize.states.saveFailure = false
-      this.$modelize.states.saveSuccess = false
+      this.$restinfront.fetch.saveInProgress = true
+      this.$restinfront.fetch.saveFailure = false
+      this.$restinfront.fetch.saveSuccess = false
     }
 
     // Allow fetch request to be aborted
     const abortController = new AbortController()
-    const requestUrl = this.constructor._buildRequestUrl(options)
-    const requestInit = await this.constructor._buildRequestInit(this, { method: options.method, signal: abortController.signal })
+    const requestUrl = this.constructor.#buildRequestUrl(options)
+    const requestInit = await this.constructor.#buildRequestInit(this, { method: options.method, signal: abortController.signal })
     // Prepare fetch request
     const fetchRequest = new Request(requestUrl, requestInit)
     let fetchResponse
 
-    this.$modelize.fetch.request = fetchRequest
+    this.$restinfront.fetch.request = fetchRequest
 
     try {
       const abortTimeout = setTimeout(() => {
@@ -814,7 +806,7 @@ class Model {
 
       clearTimeout(abortTimeout)
 
-      this.$modelize.fetch.response = fetchResponse
+      this.$restinfront.fetch.response = fetchResponse
 
       // Server side errors raise an exception
       if (!fetchResponse.ok) {
@@ -825,11 +817,11 @@ class Model {
 
       // Set states to failure
       if (options.method === 'GET') {
-        this.$modelize.states.fetchInProgress = false
-        this.$modelize.states.fetchFailure = true
+        this.$restinfront.fetch.getInProgress = false
+        this.$restinfront.fetch.getFailure = true
       } else {
-        this.$modelize.states.saveInProgress = false
-        this.$modelize.states.saveFailure = true
+        this.$restinfront.saveInProgress = false
+        this.$restinfront.saveFailure = true
       }
 
       return Promise.resolve(this)
@@ -843,22 +835,22 @@ class Model {
       isNew: false
     }
 
-    if (this.constructor._hasMatchedCollectionPattern(serverData)) {
+    if (this.constructor.#hasMatchedCollectionPattern(serverData)) {
       data = serverData[this.constructor.collectionDataKey]
       dataOptions.count = serverData[this.constructor.collectionCountKey]
     }
 
     const formattedData = new this.constructor(data, dataOptions)
-    this._mutateData(formattedData)
+    this.mutateData(formattedData)
 
     // Set states to success
     if (options.method === 'GET') {
-      this.$modelize.states.fetchInProgress = false
-      this.$modelize.states.fetchSuccess = true
-      this.$modelize.states.fetchSuccessOnce = true
+      this.$restinfront.fetch.getInProgress = false
+      this.$restinfront.fetch.getSuccess = true
+      this.$restinfront.fetch.getSuccessOnce = true
     } else {
-      this.$modelize.states.saveInProgress = false
-      this.$modelize.states.saveSuccess = true
+      this.$restinfront.fetch.saveInProgress = false
+      this.$restinfront.fetch.saveSuccess = true
     }
 
     return Promise.resolve(this)
@@ -892,7 +884,7 @@ class Model {
       })
     } else {
       if (!pathname) {
-        throw new Error(`[Modelize][Fetch] pathname is required in .get() method`)
+        throw new Error(`[Restinfront][Fetch] pathname is required in .get() method`)
       }
 
       return this.fetch({
@@ -906,14 +898,14 @@ class Model {
    * Extend a collection with more items
    */
   async getMore () {
-    this._allowCollection()
+    this.#allowCollection()
 
-    this.$modelize.fetch.options.searchParams.offset += this.$modelize.fetch.options.searchParams.limit
+    this.$restinfront.fetch.options.searchParams.offset += this.$restinfront.fetch.options.searchParams.limit
 
     return this.fetch({
       method: 'GET',
-      pathname: this.$modelize.fetch.options.pathname,
-      searchParams: this.$modelize.fetch.options.searchParams,
+      pathname: this.$restinfront.fetch.options.pathname,
+      searchParams: this.$restinfront.fetch.options.searchParams,
       extend: true
     })
   }
@@ -922,7 +914,7 @@ class Model {
    * Create a new item
    */
   post (pathname = '') {
-    this._allowSingleItem()
+    this.#allowSingleItem()
 
     return this.fetch({
       method: 'POST',
@@ -934,7 +926,7 @@ class Model {
    * Update an item
    */
   put (pathname = '') {
-    this._allowSingleItem()
+    this.#allowSingleItem()
 
     return this.fetch({
       method: 'PUT',
@@ -946,7 +938,7 @@ class Model {
    * Partial update of an item
    */
   patch (pathname = '') {
-    this._allowSingleItem()
+    this.#allowSingleItem()
 
     return this.fetch({
       method: 'PATCH',
@@ -958,9 +950,9 @@ class Model {
    * Create or update the item depends of if it comes from db or not
    */
   save (pathname = '') {
-    this._allowSingleItem()
+    this.#allowSingleItem()
 
-    return this.$modelize.isNew
+    return this.$restinfront.isNew
       ? this.post(pathname)
       : this.put(pathname)
   }
