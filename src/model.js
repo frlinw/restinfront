@@ -11,8 +11,16 @@ const COLLECTION_SYMBOL = Symbol.for('collection')
 
 
 class Model {
-  #configured = false
-  #collectionKey = 'collection'
+  static configured = false
+  static collectionKey = 'collection'
+  static endpoint = ''
+  static authentication = false
+  static primaryKeyRequired = true
+  static buildRawItemOnNew = true
+  static collectionDataKey = 'rows'
+  static collectionCountKey = 'count'
+  static onValidationError = () => null
+  static onFetchError = () => null
 
   /*****************************************************************
   * Static: Public API
@@ -22,43 +30,36 @@ class Model {
     if (!options.baseUrl) {
       throw new Error(`[Restinfront][Config] \`baseUrl\` is required`)
     }
-    if (options.authRequired && !options.authToken) {
-      throw new Error(`[Restinfront][Config] \`authToken\` is required if \`authRequired\` is enabled`)
-    }
 
     this.baseUrl = options.baseUrl
-    this.endpoint = ''
-    this.authRequired = options.authRequired || false
-    this.authToken = options.authToken
-    this.primaryKeyRequired = true
-    this.buildRawItemOnNew = true
-    this.collectionDataKey = options.collectionDataKey || 'rows'
-    this.collectionCountKey = options.collectionCountKey || 'count'
 
-    // Hooks
-    this.onValidationError = isFunction(options.onValidationError)
-      ? options.onValidationError
-      : () => null
+    if ('authentication' in options) {
+      this.authentication = options.authentication
+    }
+    if ('collectionDataKey' in options) {
+      this.collectionDataKey = options.collectionDataKey
+    }
+    if ('collectionCountKey' in options) {
+      this.collectionCountKey = options.collectionCountKey
+    }
+    if ('onValidationError' in options) {
+      this.onValidationError = options.onValidationError
+    }
+    if ('onFetchError' in options) {
+      this.onFetchError = options.onFetchError
+    }
 
-    this.onFetchError = isFunction(options.onFetchError)
-      ? options.onFetchError
-      : () => null
+    this.configured = true
   }
 
   static init (schema, options = {}) {
-    if (!this.#configured) {
+    if (!this.configured) {
       throw new Error(`[Restinfront][${this.name}] Model.config() must be called before ${this.name}.init()`)
-    }
-    if (options.authRequired && !options.authToken) {
-      throw new Error(`[Restinfront][${this.name}] \`authToken\` is required if \`authRequired\` is enabled`)
     }
 
     // Override global config
-    if ('authRequired' in options) {
-      this.authRequired = options.authRequired
-    }
-    if ('authToken' in options) {
-      this.authToken = options.authToken
+    if ('authentication' in options) {
+      this.authentication = options.authentication
     }
     if ('primaryKeyRequired' in options) {
       this.primaryKeyRequired = options.primaryKeyRequired
@@ -124,20 +125,14 @@ class Model {
       throw new Error(`[Restinfront][${this.name}] \`primaryKey\` is missing`)
     }
 
-    this.#configured = true
-
     return this
   }
 
   /*****************************************************************
-  * Instance: Private API
+  * Data formating
   *****************************************************************/
 
-  /*****************************************************************
-  * Format data before use in front
-  *****************************************************************/
-
-  static buildRawItem (item = {}) {
+  static _buildRawItem (item = {}) {
     const rawItem = {}
 
     // Build the item with default values
@@ -156,7 +151,7 @@ class Model {
     return rawItem
   }
 
-  static #buildValidator () {
+  static _buildValidator () {
     const validator = {}
 
     // Build the base validator
@@ -188,7 +183,7 @@ class Model {
   /**
    * Throw an error if the instance is not a collection
    */
-  #allowCollection () {
+  _allowCollection () {
     if (!this.isCollection) {
       throw new Error('[Restinfront] Cannot use a collection method on a single item instance')
     }
@@ -197,7 +192,7 @@ class Model {
   /**
    * Throw an error if the instance is not a single item
    */
-  #allowSingleItem () {
+  _allowSingleItem () {
     if (this.isCollection) {
       throw new Error('[Restinfront] Cannot use a single item method on a collection instance')
     }
@@ -206,20 +201,20 @@ class Model {
   /**
    * Set the list of items
    */
-  #setCollection (newCollection) {
-    this[this.constructor.#collectionKey] = newCollection
+  _setCollection (newCollection) {
+    this[this.constructor.collectionKey] = newCollection
   }
 
   /**
    * Update the current model instance with new data
    */
-  mutateData (newData) {
+  _mutateData (newData) {
     if (newData.isCollection) {
       // Extend the list or just replace it
       if (this.$restinfront.fetch?.options?.extend) {
         newData.forEach(newItem => this.add(newItem))
       } else {
-        this.#setCollection(newData.items())
+        this._setCollection(newData.items())
       }
 
       this.$restinfront.count = newData.$restinfront.count
@@ -235,7 +230,7 @@ class Model {
           this[key] instanceof Model &&
           value instanceof Model
         ) {
-          this[key].mutateData(value)
+          this[key]._mutateData(value)
         // Basic fields
         } else {
           this[key] = value
@@ -247,18 +242,18 @@ class Model {
   /**
    * Format collections and objects to use in back
    */
-  beforeSave (options) {
+  _beforeSave (options) {
     if (this.isCollection) {
-      return this.map(item => item.beforeSaveItem(options))
+      return this.map(item => item._beforeSaveItem(options))
     } else {
-      return this.beforeSaveItem(options)
+      return this._beforeSaveItem(options)
     }
   }
 
   /**
    * Format data recursively based on schema definition
    */
-  beforeSaveItem (options) {
+  _beforeSaveItem (options) {
     const removeInvalid = options?.removeInvalid
     const newItem = {}
 
@@ -268,10 +263,10 @@ class Model {
 
       if (removeInvalid) {
         if (validator.checked && validator.isValid(value, this)) {
-          newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
+          newItem[fieldname] = this.constructor.schema[fieldname].type._beforeSave(value, options)
         }
       } else {
-        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
+        newItem[fieldname] = this.constructor.schema[fieldname].type._beforeSave(value, options)
       }
     }
 
@@ -303,7 +298,7 @@ class Model {
     if (isObject(data)) {
       // Add single item specific properties
       this.$restinfront.isNew = options.isNew
-      this.$restinfront.validator = this.constructor.#buildValidator()
+      this.$restinfront.validator = this.constructor._buildValidator()
       this.$restinfront.saveProgressing = false
       this.$restinfront.saveSucceeded = false
       this.$restinfront.saveFailed = false
@@ -313,7 +308,7 @@ class Model {
         this.$restinfront.isNew &&
         this.constructor.buildRawItemOnNew
       ) {
-        data = this.constructor.buildRawItem(data)
+        data = this.constructor._buildRawItem(data)
       }
 
       // Format recursively existing fields only
@@ -337,7 +332,7 @@ class Model {
       })
 
       // Add items to the list
-      this.#setCollection([])
+      this._setCollection([])
       for (const item of data) {
         this.add(item, options)
       }
@@ -413,7 +408,7 @@ class Model {
   /**
    * Define the callback for custom collection methods
    */
-  static #getCollectionCallback (ref) {
+  static _getCollectionCallback (ref) {
     return isFunction(ref)
       ? ref
       : isString(ref)
@@ -425,8 +420,8 @@ class Model {
    * Get the list of items
    */
   items () {
-    this.#allowCollection()
-    return this[this.constructor.#collectionKey]
+    this._allowCollection()
+    return this[this.constructor.collectionKey]
   }
 
   /**
@@ -533,7 +528,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   find (ref) {
-    return this.items().find(this.constructor.#getCollectionCallback(ref)) || null
+    return this.items().find(this.constructor._getCollectionCallback(ref)) || null
   }
 
   /**
@@ -541,7 +536,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   exists (ref) {
-    return this.items().some(this.constructor.#getCollectionCallback(ref))
+    return this.items().some(this.constructor._getCollectionCallback(ref))
   }
 
   /**
@@ -549,7 +544,7 @@ class Model {
    * enhancement: find by primaryKey, find by item
    */
   remove (ref) {
-    const indexToRemove = this.items().findIndex(this.constructor.#getCollectionCallback(ref))
+    const indexToRemove = this.items().findIndex(this.constructor._getCollectionCallback(ref))
 
     if (indexToRemove === -1) {
       return null
@@ -599,7 +594,7 @@ class Model {
    * @param {array} fieldlist list of fieldname
    * @return {object} errors
    */
-  getValidationErrors (fieldlist) {
+  _getValidationErrors (fieldlist) {
     if (!isArray(fieldlist)) {
       throw new Error(`[Restinfront][Validation] .valid() params must be an array`)
     }
@@ -642,20 +637,20 @@ class Model {
 
         if (has(this, fieldname)) {
           this.$restinfront.validator[fieldname].checked = true
-          mergeErrors(fieldname, this.getValidationErrors([fieldname]))
+          mergeErrors(fieldname, this._getValidationErrors([fieldname]))
 
           if (fieldlist) {
             switch (this.constructor.schema[fieldname].type.association) {
               case 'BelongsTo':
               case 'HasOne':
                 if (this[fieldname] !== null) {
-                  mergeErrors(fieldname, this[fieldname].getValidationErrors(fieldlist))
+                  mergeErrors(fieldname, this[fieldname]._getValidationErrors(fieldlist))
                 }
                 break
               case 'HasMany':
                 // Check if each item of the collection is valid
                 this[fieldname].forEach(item => {
-                  mergeErrors(fieldname, item.getValidationErrors(fieldlist))
+                  mergeErrors(fieldname, item._getValidationErrors(fieldlist))
                 })
                 break
             }
@@ -684,7 +679,7 @@ class Model {
     this.$restinfront.fetch.saveFailed = false
     this.$restinfront.fetch.saveSucceeded = false
     // Proceed to deep validation
-    const errors = this.getValidationErrors(fieldlist)
+    const errors = this._getValidationErrors(fieldlist)
     const isValid = errors === null
 
     if (!isValid) {
@@ -709,14 +704,14 @@ class Model {
   * HTTP
   *****************************************************************/
 
-  static #hasMatchedCollectionPattern (serverData) {
+  static _hasMatchedCollectionPattern (serverData) {
     return (
       has(serverData, this.collectionCountKey) &&
       has(serverData, this.collectionDataKey)
     )
   }
 
-  static #buildRequestUrl ({ pathname, searchParams }) {
+  static _buildRequestUrl ({ pathname, searchParams }) {
     let requestUrl = joinPaths(this.requestUrl, pathname)
 
     if (searchParams) {
@@ -736,7 +731,7 @@ class Model {
     return requestUrl
   }
 
-  static async #buildRequestInit (data, options = {}) {
+  static async _buildRequestInit (data, options = {}) {
     const requestInit = {
       mode: 'cors',
       headers: {
@@ -746,8 +741,8 @@ class Model {
     }
 
     // Set Authorization header for private api
-    if (this.authRequired) {
-      const token = await this.authToken()
+    if (this.authentication) {
+      const token = await this.authentication()
 
       if (!token) {
         throw new Error(`[Restinfront][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
@@ -788,8 +783,8 @@ class Model {
 
     // Allow fetch request to be aborted
     const abortController = new AbortController()
-    const requestUrl = this.constructor.#buildRequestUrl(options)
-    const requestInit = await this.constructor.#buildRequestInit(this, { method: options.method, signal: abortController.signal })
+    const requestUrl = this.constructor._buildRequestUrl(options)
+    const requestInit = await this.constructor._buildRequestInit(this, { method: options.method, signal: abortController.signal })
     // Prepare fetch request
     const fetchRequest = new Request(requestUrl, requestInit)
     let fetchResponse
@@ -836,13 +831,13 @@ class Model {
       isNew: false
     }
 
-    if (this.constructor.#hasMatchedCollectionPattern(serverData)) {
+    if (this.constructor._hasMatchedCollectionPattern(serverData)) {
       data = serverData[this.constructor.collectionDataKey]
       dataOptions.count = serverData[this.constructor.collectionCountKey]
     }
 
     const formattedData = new this.constructor(data, dataOptions)
-    this.mutateData(formattedData)
+    this._mutateData(formattedData)
 
     // Set states to success
     if (options.method === 'GET') {
@@ -899,7 +894,7 @@ class Model {
    * Extend a collection with more items
    */
   async getMore () {
-    this.#allowCollection()
+    this._allowCollection()
 
     this.$restinfront.fetch.options.searchParams.offset += this.$restinfront.fetch.options.searchParams.limit
 
@@ -915,7 +910,7 @@ class Model {
    * Create a new item
    */
   post (pathname = '') {
-    this.#allowSingleItem()
+    this._allowSingleItem()
 
     return this.fetch({
       method: 'POST',
@@ -927,7 +922,7 @@ class Model {
    * Update an item
    */
   put (pathname = '') {
-    this.#allowSingleItem()
+    this._allowSingleItem()
 
     return this.fetch({
       method: 'PUT',
@@ -939,7 +934,7 @@ class Model {
    * Partial update of an item
    */
   patch (pathname = '') {
-    this.#allowSingleItem()
+    this._allowSingleItem()
 
     return this.fetch({
       method: 'PATCH',
@@ -951,7 +946,7 @@ class Model {
    * Create or update the item depends of if it comes from db or not
    */
   save (pathname = '') {
-    this.#allowSingleItem()
+    this._allowSingleItem()
 
     return this.$restinfront.isNew
       ? this.post(pathname)

@@ -234,7 +234,7 @@ const DataTypes = {
     isValid: (value) => value instanceof Model && value.isCollection && isArray(value.items()),
     beforeSave: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value._beforeSave(options)
       } else {
         return null
       }
@@ -258,7 +258,7 @@ const DataTypes = {
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
     beforeSave: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value._beforeSave(options)
       } else {
         return null
       }
@@ -282,7 +282,7 @@ const DataTypes = {
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
     beforeSave: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value._beforeSave(options)
       } else {
         return null
       }
