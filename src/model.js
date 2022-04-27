@@ -242,7 +242,7 @@ class Model {
   /**
    * Format collections and objects to use in back
    */
-  _beforeSave (options) {
+  beforeSave (options) {
     if (this.isCollection) {
       return this.map(item => item._beforeSaveItem(options))
     } else {
@@ -263,10 +263,10 @@ class Model {
 
       if (removeInvalid) {
         if (validator.checked && validator.isValid(value, this)) {
-          newItem[fieldname] = this.constructor.schema[fieldname].type._beforeSave(value, options)
+          newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
         }
       } else {
-        newItem[fieldname] = this.constructor.schema[fieldname].type._beforeSave(value, options)
+        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
       }
     }
 
