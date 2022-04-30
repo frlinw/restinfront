@@ -28,9 +28,7 @@ Restinfront.config({
   // Base URL for API call
   baseUrl: 'https://api.example.com',
   // Active authorization header for every API call
-  // authToken is required if requireAuth is set to true
-  authRequired: true,
-  authToken: () => localStorage.get('authToken'),
+  authentication: () => localStorage.get('authToken'),
   onFetchError: (response) => {
     console.warn('[Restinfront][Fetch]', error)
   },
@@ -118,7 +116,8 @@ class User extends Model {
       }
     }, {
       endpoint: 'private/users'
-      authRequired: true
+      // authentication can be disabled per model
+      // authentication: false
     })
   }
 }
