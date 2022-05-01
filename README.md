@@ -24,7 +24,7 @@ import Restinfront from 'restinfront'
 const Model = Restinfront.Model
 const DataTypes = Restinfront.DataTypes
 
-Restinfront.config({
+Model.config({
   // Base URL for API call
   baseUrl: 'https://api.example.com',
   // Active authorization header for every API call
