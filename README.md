@@ -28,7 +28,7 @@ Model.config({
   // Base URL for API call
   baseUrl: 'https://api.example.com',
   // Active authorization header for every API call
-  authentication: () => localStorage.get('authToken'),
+  authentication: () => localStorage.get('jwt'),
   onFetchError: (response) => {
     console.warn('[Restinfront][Fetch]', error)
   },
