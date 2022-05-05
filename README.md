@@ -56,9 +56,9 @@ import Profile from './Profile.js'
 import Plan from './Plan.js'
 
 
-class User extends Model {
-  static init () {
-    return super.init({
+export default class User extends Model {
+  static {
+    this.init({
       id: {
         type: DataTypes.UUID, // required
         primaryKey: true, // only once per model
@@ -121,9 +121,6 @@ class User extends Model {
     })
   }
 }
-
-
-export default User.init()
 ```
 
 ### Manage your data
