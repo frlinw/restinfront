@@ -17,30 +17,38 @@ npm install restinfront
 config.js
 
 ```javascript
-import Restinfront from 'restinfront'
+import { Model } from 'restinfront'
 
 
-// Main config
-const Model = Restinfront.Model
-const DataTypes = Restinfront.DataTypes
-
-Model.config({
-  // Base URL for API call
-  baseUrl: 'https://api.example.com',
-  // Active authorization header for every API call
-  authentication: () => localStorage.get('jwt'),
-  onFetchError: (response) => {
-    console.warn('[Restinfront][Fetch]', error)
-  },
-  onValidationError: (error) => {
-    console.warn('[Restinfront][Validation]', error)
+export class BaseModel extends Model {
+  static {
+    this.init({
+      onFetchError: (response) => {
+        console.warn('[Restinfront][Fetch]', error)
+      },
+      onValidationError: (error) => {
+        console.warn('[Restinfront][Validation]', error)
+      }
+    })
   }
-})
+}
 
+export class PrivateModel extends BaseModel {
+  static {
+    this.init({
+      baseUrl: `https://api.example.com/private`,
+      authentication: () => store.dispatch('access/retrieveToken')
+    })
+  }
+}
 
-export {
-  Model,
-  DataTypes
+export class PublicModel extends BaseModel {
+  static {
+    this.init({
+      baseUrl: `https://api.example.com/public`,
+      authentication: false
+    })
+  }
 }
 ```
 
@@ -49,75 +57,74 @@ export {
 User.js
 
 ```javascript
-import { Model, DataTypes } from './config.js'
+import { PrivateModel, FieldTypes } from './config.js'
 
 import Sponsor from './Sponsor.js'
 import Profile from './Profile.js'
 import Plan from './Plan.js'
 
 
-export default class User extends Model {
+export default class User extends PrivateModel {
   static {
     this.init({
-      id: {
-        type: DataTypes.UUID, // required
-        primaryKey: true, // only once per model
-        // defaultValue: // optional | defaultValue from `type` option
-        // allowBlank: // optional | false
-        // isValid: // optional | (value, data) => true
-      },
-      createdAt: {
-        type: DataTypes.DATETIME
-      },
-      firstName: {
-        type: DataTypes.STRING
-      },
-      lastName: {
-        type: DataTypes.STRING
-      },
-      email: {
-        type: DataTypes.EMAIL
-      },
-      password: {
-        type: DataTypes.STRING
-      },
-      phone: {
-        type: DataTypes.PHONE,
-        allowBlank: true
-      },
-      address: {
-        type: DataTypes.ADDRESS,
-        allowBlank: true
-      },
-      role: {
-        type: DataTypes.STRING
-      },
-      isActive: {
-        type: DataTypes.BOOLEAN
-      },
-      // One-to-One relation
-      profile: {
-        type: DataTypes.HASONE(Profile)
-      },
-      // One-to-Many relation
-      plans: {
-        type: DataTypes.HASMANY(Plan)
-      },
-      // Many-to-One relation
-      sponsor: {
-        type: DataTypes.BELONGSTO(Sponsor)
-      },
-      // Virtual fields
-      newEmail: {
-        type: DataTypes.EMAIL
-      },
-      newPassword: {
-        type: DataTypes.STRING
+      endpoint: '/users',
+      schema: {
+        id: {
+          type: FieldTypes.UUID, // required
+          primaryKey: true, // only once per model
+          // defaultValue: // optional | defaultValue from `type` option
+          // allowBlank: // optional | false
+          // isValid: // optional | (value, data) => true
+        },
+        createdAt: {
+          type: FieldTypes.DATETIME
+        },
+        firstName: {
+          type: FieldTypes.STRING
+        },
+        lastName: {
+          type: FieldTypes.STRING
+        },
+        email: {
+          type: FieldTypes.EMAIL
+        },
+        password: {
+          type: FieldTypes.STRING
+        },
+        phone: {
+          type: FieldTypes.PHONE,
+          allowBlank: true
+        },
+        address: {
+          type: FieldTypes.ADDRESS,
+          allowBlank: true
+        },
+        role: {
+          type: FieldTypes.STRING
+        },
+        isActive: {
+          type: FieldTypes.BOOLEAN
+        },
+        // One-to-One relation
+        profile: {
+          type: FieldTypes.HASONE(Profile)
+        },
+        // One-to-Many relation
+        plans: {
+          type: FieldTypes.HASMANY(Plan)
+        },
+        // Many-to-One relation
+        sponsor: {
+          type: FieldTypes.BELONGSTO(Sponsor)
+        },
+        // Virtual fields
+        newEmail: {
+          type: FieldTypes.EMAIL
+        },
+        newPassword: {
+          type: FieldTypes.STRING
+        }
       }
-    }, {
-      endpoint: 'private/users'
-      // authentication can be disabled per model
-      // authentication: false
     })
   }
 }
@@ -277,7 +284,6 @@ export default {
 </template>
 ```
 
-## TODO
-- Build & release workflow
+## Contributions
 - Tests
-- Improved documentation
+- Docs

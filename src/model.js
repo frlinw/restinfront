@@ -5,18 +5,19 @@ import isObject from './utils/isObject.js'
 import isString from './utils/isString.js'
 import isDate from './utils/isDate.js'
 import joinPaths from './utils/joinPaths.js'
+import processUserInput from './utils/processUserInput.js'
 
 
 const COLLECTION_SYMBOL = Symbol.for('collection')
+const COLLECTION_KEY = 'collection'
 
 
-class Model {
-  static configured = false
-  static collectionKey = 'collection'
+export default class Model {
+  static baseUrl = ''
   static endpoint = ''
   static authentication = false
-  static primaryKeyRequired = true
-  static buildRawItemOnNew = true
+  static schema = false
+  static primaryKeyFieldname = null
   static collectionDataKey = 'rows'
   static collectionCountKey = 'count'
   static onValidationError = () => null
@@ -26,103 +27,74 @@ class Model {
   * Static: Public API
   *****************************************************************/
 
-  static config (options = {}) {
-    if (!options.baseUrl) {
-      throw new Error(`[Restinfront][Config] \`baseUrl\` is required`)
-    }
-
-    this.baseUrl = options.baseUrl
-
-    if ('authentication' in options) {
-      this.authentication = options.authentication
-    }
-    if ('collectionDataKey' in options) {
-      this.collectionDataKey = options.collectionDataKey
-    }
-    if ('collectionCountKey' in options) {
-      this.collectionCountKey = options.collectionCountKey
-    }
-    if ('onValidationError' in options) {
-      this.onValidationError = options.onValidationError
-    }
-    if ('onFetchError' in options) {
-      this.onFetchError = options.onFetchError
-    }
-
-    this.configured = true
-  }
-
-  static init (schema, options = {}) {
-    if (!this.configured) {
-      throw new Error(`[Restinfront][${this.name}] Model.config() must be called before ${this.name}.init()`)
-    }
-
-    // Override global config
-    if ('authentication' in options) {
-      this.authentication = options.authentication
-    }
-    if ('primaryKeyRequired' in options) {
-      this.primaryKeyRequired = options.primaryKeyRequired
-    }
-    if ('buildRawItemOnNew' in options) {
-      this.buildRawItemOnNew = options.buildRawItemOnNew
-    }
-
-    // Prebuild the url
-    if (options.endpoint) {
-      this.endpoint = options.endpoint
-      this.requestUrl = joinPaths(this.baseUrl, this.endpoint)
-    }
+  static init (options = {}) {
+    // Throw an error if user input does not match the spec
+    processUserInput({
+      userInput: options,
+      assign: (prop) => this[prop] = options[prop],
+      onError: (message) => {
+        throw new Error(`[Restinfront] ${message}`)
+      },
+      specifications: {
+        baseUrl: { type: 'string' },
+        endpoint: { type: 'string' },
+        collectionDataKey: { type: 'string' },
+        collectionCountKey: { type: 'string' },
+        authentication: { type: ['function', 'boolean'] },
+        schema: { type: ['function', 'boolean'] },
+        onValidationError: { type: 'function' },
+        onFetchError: { type: 'function' },
+      }
+    })
 
     // Parse schema fields to set default values for each option
-    this.schema = schema
-    this.primaryKeyFieldname = null
+    if (this.schema) {
+      for (const fieldname in this.schema) {
+        const fieldconf = this.schema[fieldname]
 
-    for (const fieldname in this.schema) {
-      const fieldconf = this.schema[fieldname]
+        // Type is a required param
+        if (!('type' in fieldconf)) {
+          throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
+        }
 
-      // Type is a required param
-      if (!('type' in fieldconf)) {
-        throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
+        // Set the primary key
+        if (fieldconf.primaryKey) {
+          this.primaryKeyFieldname = fieldname
+        }
+
+        // Define the default value
+        const defaultValue = 'defaultValue' in fieldconf
+          ? fieldconf.defaultValue
+          : fieldconf.type.defaultValue
+        // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
+        fieldconf.defaultValue = isFunction(defaultValue)
+          ? defaultValue
+          : () => defaultValue
+
+        // Default blank is restricted
+        const allowBlank = 'allowBlank' in fieldconf
+          ? fieldconf.allowBlank
+          : false
+        // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
+        fieldconf.allowBlank = isFunction(allowBlank)
+          ? allowBlank
+          : () => allowBlank
+
+        // Default valid method is permissive
+        if (!('isValid' in fieldconf)) {
+          fieldconf.isValid = () => true
+        }
+
+        // Require validation as a default except for primary key and timestamp fields
+        fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
       }
-
-      // Set the primary key
-      if (fieldconf.primaryKey) {
-        this.primaryKeyFieldname = fieldname
-      }
-
-      // Define the default value
-      const defaultValue = 'defaultValue' in fieldconf
-        ? fieldconf.defaultValue
-        : fieldconf.type.defaultValue
-      // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
-      fieldconf.defaultValue = isFunction(defaultValue)
-        ? defaultValue
-        : () => defaultValue
-
-      // Default blank is restricted
-      const allowBlank = 'allowBlank' in fieldconf
-        ? fieldconf.allowBlank
-        : false
-      // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
-      fieldconf.allowBlank = isFunction(allowBlank)
-        ? allowBlank
-        : () => allowBlank
-
-      // Default valid method is permissive
-      if (!('isValid' in fieldconf)) {
-        fieldconf.isValid = () => true
-      }
-
-      // Require validation as a default except for primary key and timestamp fields
-      fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
     }
 
     if (
-      this.primaryKeyRequired &&
+      this.schema &&
       this.primaryKeyFieldname === null
     ) {
-      throw new Error(`[Restinfront][${this.name}] \`primaryKey\` is missing`)
+      console.warn(`[Restinfront][${this.name}] \`primaryKey\` field attribute is missing on the model. This can lead to unexpected behavior.`)
     }
 
     return this
@@ -202,7 +174,7 @@ class Model {
    * Set the list of items
    */
   _setCollection (newCollection) {
-    this[this.constructor.collectionKey] = newCollection
+    this[COLLECTION_KEY] = newCollection
   }
 
   /**
@@ -219,23 +191,21 @@ class Model {
 
       this.$restinfront.count = newData.$restinfront.count
     } else {
-      Object.keys(newData).forEach(key => {
-        const value = newData[key]
-
+      for (const [key, value] of Object.entries(newData)) {
         // Mutate only some keys
         if (key === '$restinfront') {
           this[key].isNew = value.isNew
         // Recursive mutation
         } else if (
-          this[key] instanceof Model &&
-          value instanceof Model
+          this[key]?.$restinfront &&
+          value?.$restinfront
         ) {
           this[key]._mutateData(value)
         // Basic fields
         } else {
           this[key] = value
         }
-      })
+      }
     }
   }
 
@@ -277,11 +247,6 @@ class Model {
   * Build instance item
   */
   constructor (data, options = {}) {
-    options = {
-      isNew: true,
-      ...options
-    }
-
     this.$restinfront = {
       fetch: {
         options: null,
@@ -297,7 +262,7 @@ class Model {
     // Format an item
     if (isObject(data)) {
       // Add single item specific properties
-      this.$restinfront.isNew = options.isNew
+      this.$restinfront.isNew = options.isNew ?? true
       this.$restinfront.validator = this.constructor._buildValidator()
       this.$restinfront.saveProgressing = false
       this.$restinfront.saveSucceeded = false
@@ -305,8 +270,8 @@ class Model {
 
       // Build a raw item if it's a new instance
       if (
-        this.$restinfront.isNew &&
-        this.constructor.buildRawItemOnNew
+        this.constructor.schema &&
+        this.$restinfront.isNew
       ) {
         data = this.constructor._buildRawItem(data)
       }
@@ -421,7 +386,7 @@ class Model {
    */
   items () {
     this._allowCollection()
-    return this[this.constructor.collectionKey]
+    return this[COLLECTION_KEY]
   }
 
   /**
@@ -953,6 +918,3 @@ class Model {
       : this.put(pathname)
   }
 }
-
-
-export default Model
