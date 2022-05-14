@@ -1,5 +1,2 @@
-import Model from './src/model.js'
-import DataTypes from './src/datatypes.js'
-
-
-export default { Model, DataTypes }
+export { default as Model } from './src/model.js'
+export { default as FieldTypes } from './src/datatypes.js'
