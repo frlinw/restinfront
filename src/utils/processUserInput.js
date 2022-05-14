@@ -31,7 +31,7 @@ export default function processUserInput ({ userInput, assign, specifications, o
         (isArray(propSpecs.type) && !propSpecs.type.some(type => TYPES[type](userInput[prop]))) ||
         (isString(propSpecs.type) && !TYPES[propSpecs.type](userInput[prop]))
       ) {
-        throw new Error(`\`${prop}\` must be a ${propSpecs.type}`)
+        onError(`\`${prop}\` must be a ${propSpecs.type}`)
       }
 
       if (propSpecs.assign) {
