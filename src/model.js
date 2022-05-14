@@ -712,7 +712,7 @@ class Model {
   }
 
   static _buildRequestUrl ({ pathname, searchParams }) {
-    let requestUrl = joinPaths(this.requestUrl, pathname)
+    let requestUrl = joinPaths(this.baseUrl, this.endpoint, pathname)
 
     if (searchParams) {
       requestUrl += `?${
@@ -745,7 +745,7 @@ class Model {
       const token = await this.authentication()
 
       if (!token) {
-        throw new Error(`[Restinfront][Fetch] Impossible to get the auth token to access ${this.requestUrl}`)
+        throw new Error(`[Restinfront][${this.name}][Fetch] Impossible to retrieve the auth token`)
       }
 
       requestInit.headers['Authorization'] = `Bearer ${token}`
