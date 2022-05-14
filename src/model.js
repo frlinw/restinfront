@@ -41,7 +41,7 @@ export default class Model {
         collectionDataKey: { type: 'string' },
         collectionCountKey: { type: 'string' },
         authentication: { type: ['function', 'boolean'] },
-        schema: { type: ['function', 'boolean'] },
+        schema: { type: ['object', 'boolean'] },
         onValidationError: { type: 'function' },
         onFetchError: { type: 'function' },
       }
