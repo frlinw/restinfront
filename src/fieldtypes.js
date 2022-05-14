@@ -12,17 +12,13 @@ import isFile from './utils/isFile.js'
 import isIp from './utils/isIp.js'
 import isEmptyObject from './utils/isEmptyObject.js'
 import prependZero from './utils/prependZero.js'
-import generateUUID from './utils/generateUUID.js'
-import undashUUID from './utils/undashUUID.js'
-import redashUUID from './utils/redashUUID.js'
 import parseDate from './utils/parseDate.js'
 
 
-const DataTypes = {
+export default {
   //
   // String
   //
-
   STRING: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
@@ -31,11 +27,11 @@ const DataTypes = {
     beforeBuild: (value) => value
   },
   UUID: {
-    defaultValue: () => undashUUID(generateUUID()),
+    defaultValue: () => crypto.randomUUID(),
     isBlank: (value) => value === '',
     isValid: (value) => isString(value),
-    beforeSave: (value) => redashUUID(value),
-    beforeBuild: (value) => undashUUID(value)
+    beforeSave: (value) => value,
+    beforeBuild: (value) => value
   },
   EMAIL: {
     defaultValue: () => '',
@@ -85,11 +81,9 @@ const DataTypes = {
     beforeSave: (value) => value,
     beforeBuild: (value) => value
   },
-
   //
   // Boolean
   //
-
   BOOLEAN: {
     defaultValue: () => null,
     isBlank: (value) => value === null,
@@ -97,11 +91,9 @@ const DataTypes = {
     beforeSave: (value) => value,
     beforeBuild: (value) => value
   },
-
   //
   // Number
   //
-
   INTEGER: {
     defaultValue: () => null,
     isBlank: (value) => value === null,
@@ -132,11 +124,9 @@ const DataTypes = {
       }
     }
   },
-
   //
   // Date
   //
-
   DATEONLY: {
     defaultValue: () => null,
     isBlank: (value) => value === null,
@@ -185,11 +175,9 @@ const DataTypes = {
       }
     }
   },
-
   //
   // Object
   //
-
   OBJECT: {
     defaultValue: () => ({}),
     isBlank: (value) => isEmptyObject(value),
@@ -211,11 +199,9 @@ const DataTypes = {
     beforeSave: (value) => value,
     beforeBuild: (value) => value
   },
-
   //
   // Array
   //
-
   ARRAY: {
     defaultValue: () => ([]),
     isBlank: (value) => value.length === 0,
@@ -223,11 +209,9 @@ const DataTypes = {
     beforeSave: (value) => value,
     beforeBuild: (value) => value
   },
-
   //
   // Associations
   //
-
   HASMANY: (Model) => ({
     defaultValue: () => ([]),
     isBlank: (value) => value.isEmpty,
@@ -301,6 +285,3 @@ const DataTypes = {
     association: 'BelongsTo'
   })
 }
-
-
-export default DataTypes
