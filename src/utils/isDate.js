@@ -1,5 +1,5 @@
 /**
- * Check if a value is a Date
+ * Check if a value is a Data
  * @param {any} value
  * @return {boolean}
  */

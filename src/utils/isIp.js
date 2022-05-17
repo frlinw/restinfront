@@ -1,13 +1,8 @@
+/**
+ * Check if a value is an IPv4
+ * @param {any} value
+ * @return {boolean}
+ */
 export default function isIp (value) {
-  const blocks = value.split('.')
-
-  if (blocks.length === 4) {
-    return blocks.every(block => (
-      !Number.isNaN(block) &&
-      Number.parseInt(block, 10) >= 0 &&
-      Number.parseInt(block, 10) <= 255
-    ))
-  }
-
-  return false
+  return /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/g.test(value)
 }

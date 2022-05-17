@@ -1,6 +1,7 @@
 /**
  * Join pathnames
- * @param {string} paths
+ * @param {...string} paths
+ * @return {string}
  */
 export default function joinPaths (...paths) {
   let fullpath = paths
@@ -18,6 +19,6 @@ export default function joinPaths (...paths) {
   if (fullpath.endsWith('/')) {
     fullpath = fullpath.substring(0, fullpath.length - 1)
   }
-  
+
   return fullpath
 }
