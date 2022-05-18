@@ -23,28 +23,28 @@ export default {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   UUID: {
     defaultValue: () => crypto.randomUUID(),
     isBlank: (value) => value === '',
     isValid: (value) => isString(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   EMAIL: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value) && isEmail(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   PHONE: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value),
-    beforeSave: (value) => {
+    beforeSerialize: (value) => {
       let sanitizedPhone = ''
 
       for (const n of value) {
@@ -64,21 +64,21 @@ export default {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value) && isUrl(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   FILE: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value) && isFile(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   IP: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value) && isIp(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   //
@@ -88,7 +88,7 @@ export default {
     defaultValue: () => null,
     isBlank: (value) => value === null,
     isValid: (value) => isBoolean(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   //
@@ -98,7 +98,7 @@ export default {
     defaultValue: () => null,
     isBlank: (value) => value === null,
     isValid: (value) => isInteger(value) && value >= 0,
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => {
       const parsedValue = Number.parseInt(value)
 
@@ -113,7 +113,7 @@ export default {
     defaultValue: () => null,
     isBlank: (value) => value === null,
     isValid: (value) => isNumber(value) && value >= 0,
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => {
       const parsedValue = Number.parseFloat(value)
 
@@ -131,7 +131,7 @@ export default {
     defaultValue: () => null,
     isBlank: (value) => value === null,
     isValid: (value) => isDate(value),
-    beforeSave: (value) => {
+    beforeSerialize: (value) => {
       if (isDate(value)) {
         // Cannot use .toISOString because it convert date to UTC
         // DateOnly must be the day in the local time
@@ -158,7 +158,7 @@ export default {
     defaultValue: () => null,
     isBlank: (value) => value === null,
     isValid: (value) => isDate(value),
-    beforeSave: (value) => {
+    beforeSerialize: (value) => {
       if (isDate(value)) {
         return value.toISOString()
       } else {
@@ -182,7 +182,7 @@ export default {
     defaultValue: () => ({}),
     isBlank: (value) => isEmptyObject(value),
     isValid: (value) => isObject(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   ADDRESS: {
@@ -196,7 +196,7 @@ export default {
     }),
     isBlank: (value) => isEmptyObject(value) || value.route === '' || value.postcode === '' || value.city === '',
     isValid: (value) => isObject(value) && has(value, 'number') && has(value, 'route') && has(value, 'postcode') && has(value, 'city'),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   //
@@ -206,7 +206,7 @@ export default {
     defaultValue: () => ([]),
     isBlank: (value) => value.length === 0,
     isValid: (value) => isArray(value),
-    beforeSave: (value) => value,
+    beforeSerialize: (value) => value,
     beforeBuild: (value) => value
   },
   //
@@ -216,9 +216,9 @@ export default {
     defaultValue: () => ([]),
     isBlank: (value) => value.isEmpty,
     isValid: (value) => value instanceof Model && value.isCollection && isArray(value.items()),
-    beforeSave: (value, options) => {
+    beforeSerialize: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value.beforeSerialize(options)
       } else {
         return null
       }
@@ -240,9 +240,9 @@ export default {
     defaultValue: (primaryKey) => Model._buildRawItem({ primaryKey }),
     isBlank: (value) => value === null,
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
-    beforeSave: (value, options) => {
+    beforeSerialize: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value.beforeSerialize(options)
       } else {
         return null
       }
@@ -264,9 +264,9 @@ export default {
     defaultValue: () => Model._buildRawItem(),
     isBlank: (value) => value === null,
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
-    beforeSave: (value, options) => {
+    beforeSerialize: (value, options) => {
       if (value instanceof Model) {
-        return value.beforeSave(options)
+        return value.beforeSerialize(options)
       } else {
         return null
       }

@@ -27,6 +27,19 @@ export default class Model {
   * Static: Public API
   *****************************************************************/
 
+  /**
+   * Build an item based on the schema and filled with default values
+   * @param {object} options
+   * @param {string} [options.baseUrl]
+   * @param {string} [options.endpoint]
+   * @param {string} [options.collectionDataKey]
+   * @param {string} [options.collectionCountKey]
+   * @param {function|boolean} [options.authentication]
+   * @param {object} [options.schema]
+   * @param {function} [options.onValidationError]
+   * @param {function} [options.onFetchError]
+   * @returns {Model}
+   */
   static init (options = {}) {
     // Throw an error if user input does not match the spec
     processUserInput({
@@ -48,46 +61,42 @@ export default class Model {
     })
 
     // Parse schema fields to set default values for each option
-    if (this.schema) {
-      for (const fieldname in this.schema) {
-        const fieldconf = this.schema[fieldname]
-
-        // Type is a required param
-        if (!('type' in fieldconf)) {
-          throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
-        }
-
-        // Set the primary key
-        if (fieldconf.primaryKey) {
-          this.primaryKeyFieldname = fieldname
-        }
-
-        // Define the default value
-        const defaultValue = 'defaultValue' in fieldconf
-          ? fieldconf.defaultValue
-          : fieldconf.type.defaultValue
-        // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
-        fieldconf.defaultValue = isFunction(defaultValue)
-          ? defaultValue
-          : () => defaultValue
-
-        // Default blank is restricted
-        const allowBlank = 'allowBlank' in fieldconf
-          ? fieldconf.allowBlank
-          : false
-        // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
-        fieldconf.allowBlank = isFunction(allowBlank)
-          ? allowBlank
-          : () => allowBlank
-
-        // Default valid method is permissive
-        if (!('isValid' in fieldconf)) {
-          fieldconf.isValid = () => true
-        }
-
-        // Require validation as a default except for primary key and timestamp fields
-        fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
+    if (this.schema) for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
+      // Type is a required param
+      if (!('type' in fieldconf)) {
+        throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
       }
+
+      // Set the primary key
+      if (fieldconf.primaryKey) {
+        this.primaryKeyFieldname = fieldname
+      }
+
+      // Define the default value
+      const defaultValue = 'defaultValue' in fieldconf
+        ? fieldconf.defaultValue
+        : fieldconf.type.defaultValue
+      // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
+      fieldconf.defaultValue = isFunction(defaultValue)
+        ? defaultValue
+        : () => defaultValue
+
+      // Default blank is restricted
+      const allowBlank = 'allowBlank' in fieldconf
+        ? fieldconf.allowBlank
+        : false
+      // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
+      fieldconf.allowBlank = isFunction(allowBlank)
+        ? allowBlank
+        : () => allowBlank
+
+      // Default valid method is permissive
+      if (!('isValid' in fieldconf)) {
+        fieldconf.isValid = () => true
+      }
+
+      // Require validation as a default except for primary key and timestamp fields
+      fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
     }
 
     if (
@@ -104,6 +113,11 @@ export default class Model {
   * Data formating
   *****************************************************************/
 
+  /**
+   * Build an item based on the schema and filled with default values
+   * @param {object} item
+   * @returns {object}
+   */
   static _buildRawItem (item = {}) {
     const rawItem = {}
 
@@ -123,13 +137,15 @@ export default class Model {
     return rawItem
   }
 
+  /**
+   * Build a validator function for every declared fields
+   * @returns {object}
+   */
   static _buildValidator () {
     const validator = {}
 
     // Build the base validator
-    for (const fieldname in this.schema) {
-      const fieldconf = this.schema[fieldname]
-
+    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
       validator[fieldname] = {
         checked: fieldconf.autoChecked,
         isValid: (value, data) => {
@@ -153,104 +169,12 @@ export default class Model {
   }
 
   /**
-   * Throw an error if the instance is not a collection
-   */
-  _allowCollection () {
-    if (!this.isCollection) {
-      throw new Error('[Restinfront] Cannot use a collection method on a single item instance')
-    }
-  }
-
-  /**
-   * Throw an error if the instance is not a single item
-   */
-  _allowSingleItem () {
-    if (this.isCollection) {
-      throw new Error('[Restinfront] Cannot use a single item method on a collection instance')
-    }
-  }
-
-  /**
-   * Set the list of items
-   */
-  _setCollection (newCollection) {
-    this[COLLECTION_KEY] = newCollection
-  }
-
-  /**
-   * Update the current model instance with new data
-   */
-  _mutateData (newData) {
-    if (newData.isCollection) {
-      // Extend the list or just replace it
-      if (this.$restinfront.fetch?.options?.extend) {
-        newData.forEach(newItem => this.add(newItem))
-      } else {
-        this._setCollection(newData.items())
-      }
-
-      this.$restinfront.count = newData.$restinfront.count
-    } else {
-      for (const [key, value] of Object.entries(newData)) {
-        // Mutate only some keys
-        if (key === '$restinfront') {
-          this[key].isNew = value.isNew
-        // Recursive mutation
-        } else if (
-          this[key]?.$restinfront &&
-          value?.$restinfront
-        ) {
-          this[key]._mutateData(value)
-        // Basic fields
-        } else {
-          this[key] = value
-        }
-      }
-    }
-  }
-
-  /**
-   * Format collections and objects to use in back
-   */
-  beforeSave (options) {
-    if (this.isCollection) {
-      return this.map(item => item._beforeSaveItem(options))
-    } else {
-      return this._beforeSaveItem(options)
-    }
-  }
-
-  /**
-   * Format data recursively based on schema definition
-   */
-  _beforeSaveItem (options) {
-    const removeInvalid = options?.removeInvalid
-    const newItem = {}
-
-    for (const fieldname in this.$restinfront.validator) {
-      const validator = this.$restinfront.validator[fieldname]
-      const value = this[fieldname]
-
-      if (removeInvalid) {
-        if (validator.checked && validator.isValid(value, this)) {
-          newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
-        }
-      } else {
-        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSave(value, options)
-      }
-    }
-
-    return newItem
-  }
-
-  /**
   * Build instance item
   */
   constructor (data, options = {}) {
     this.$restinfront = {
       fetch: {
         options: null,
-        request: null,
         response: null,
         getProgressing: false,
         getSucceededOnce: false,
@@ -276,10 +200,8 @@ export default class Model {
         data = this.constructor._buildRawItem(data)
       }
 
-      // Format recursively existing fields only
-      for (const fieldname in data) {
-        const value = data[fieldname]
-        // Try to format the value
+      // Format existing fields recursively
+      for (const [fieldname, value] of Object.entries(data)) {
         this[fieldname] = has(this.constructor.schema, fieldname)
           ? this.constructor.schema[fieldname].type.beforeBuild(value, options)
           : value
@@ -353,17 +275,119 @@ export default class Model {
   }
 
   /**
-   * Convert instance to JSON string
+   * Throw an error if the instance is not a collection
+   * @returns {void}
    */
-  toJSON (options = {}) {
-    return JSON.stringify(this.beforeSave(options))
+  _allowCollection () {
+    if (!this.isCollection) {
+      throw new Error('[Restinfront] This function MUST be used by a collection instance')
+    }
+  }
+
+  /**
+   * Throw an error if the instance is not a single item
+   * @returns {void}
+   */
+  _denyCollection () {
+    if (this.isCollection) {
+      throw new Error('[Restinfront] This function CANNOT be used by a collection instance')
+    }
+  }
+
+  /**
+   * Set the list of items
+   * @param {Array<Model>} newCollection
+   * @returns {void}
+   */
+  _setCollection (newCollection) {
+    this[COLLECTION_KEY] = newCollection
+  }
+
+  /**
+   * Update the current model instance with new data
+   * @param {Model} newData
+   * @returns {void}
+   */
+  _mutateData (newData) {
+    if (newData.isCollection) {
+      // Extend the list or just replace it
+      if (this.$restinfront.fetch?.options?.extend) {
+        newData.forEach(newItem => this.add(newItem))
+      } else {
+        this._setCollection(newData.items())
+      }
+
+      this.$restinfront.count = newData.$restinfront.count
+    } else {
+      for (const [key, value] of Object.entries(newData)) {
+        // Mutate only some keys
+        if (key === '$restinfront') {
+          this[key].isNew = value.isNew
+        // Recursive mutation
+        } else if (
+          this[key]?.$restinfront &&
+          value?.$restinfront
+        ) {
+          this[key]._mutateData(value)
+        // Basic fields
+        } else {
+          this[key] = value
+        }
+      }
+    }
+  }
+
+  /**
+   * Format collections and objects to use in back
+   * @param {object} options
+   * @param {boolean} [options.removeInvalid]
+   */
+  beforeSerialize (options = {}) {
+    if (this.isCollection) {
+      return this.map(item => item._beforeSerializeItem(options))
+    } else {
+      return this._beforeSerializeItem(options)
+    }
+  }
+
+  /**
+   * Format data recursively based on schema definition
+   * @param {object} options
+   * @param {boolean} [options.removeInvalid]
+   */
+   _beforeSerializeItem (options = {}) {
+    const removeInvalid = options.removeInvalid ?? false
+
+    const newItem = {}
+
+    for (const [fieldname, validator] of Object.entries(this.$restinfront.validator)) {
+      const value = this[fieldname]
+
+      if (
+        !removeInvalid ||
+        (removeInvalid && validator.checked && validator.isValid(value, this))
+      ) {
+        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSerialize(value, options)
+      }
+    }
+
+    return newItem
+  }
+
+  /**
+   * Convert instance to JSON string
+   * @returns {string}
+   */
+  toJSON () {
+    return JSON.stringyfy(this.beforeSerialize())
   }
 
   /**
    * Clone an instance
+   * @returns {Model}
    */
   clone () {
-    return new this.constructor(JSON.parse(this.toJSON()))
+    return new this.constructor(this.beforeSerialize())
   }
 
   /*****************************************************************
@@ -383,6 +407,7 @@ export default class Model {
 
   /**
    * Get the list of items
+   * @returns {Array<Model>}
    */
   items () {
     this._allowCollection()
@@ -420,6 +445,7 @@ export default class Model {
   /**
    * Check if an item is the last of the list
    * @param {Object} ref - item (with the primary key) to check existence
+   * @returns {boolean}
    */
   isLast (ref) {
     return this.last[this.constructor.primaryKeyFieldname] === ref[this.constructor.primaryKeyFieldname]
@@ -443,7 +469,7 @@ export default class Model {
    * Proxy for native sort
    */
   sort (callback) {
-    return [...this.items()].sort(callback)
+    return this.items().sort(callback)
   }
 
   /**
@@ -482,6 +508,16 @@ export default class Model {
   }
 
   /**
+   * Proxy for native find
+   * enhancement: find by primaryKey, find by item
+   * @param {string|function|object} ref
+   * @returns {object|null}
+   */
+   find (ref) {
+    return this.items().find(this.constructor._getCollectionCallback(ref)) || null
+  }
+
+  /**
    * Remove all items from the collection
    */
   clear () {
@@ -489,16 +525,10 @@ export default class Model {
   }
 
   /**
-   * Proxy for native find
-   * enhancement: find by primaryKey, find by item
-   */
-  find (ref) {
-    return this.items().find(this.constructor._getCollectionCallback(ref)) || null
-  }
-
-  /**
    * Check if an item exists in the collection
    * enhancement: find by primaryKey, find by item
+   * @param {string|function|object} ref
+   * @returns {boolean}
    */
   exists (ref) {
     return this.items().some(this.constructor._getCollectionCallback(ref))
@@ -507,6 +537,8 @@ export default class Model {
   /**
    * Remove the item from the collection based on its primary key
    * enhancement: find by primaryKey, find by item
+   * @param {string|function|object} ref
+   * @returns {object|null}
    */
   remove (ref) {
     const indexToRemove = this.items().findIndex(this.constructor._getCollectionCallback(ref))
@@ -523,6 +555,7 @@ export default class Model {
   /**
    * Add a new item to the collection
    * @param {Object} options - optional definition of the item to add
+   * @returns {Model}
    */
   add (item = {}, options = {}) {
     const instance = item instanceof this.constructor
@@ -538,7 +571,8 @@ export default class Model {
 
   /**
    * Remove or add the item from the collection based on its primary key
-   * @param {Object} item - item (with the primary key) to add or remove
+   * @param {object} item - item (with the primary key) to add or remove
+   * @param {function|null} callback
    */
   toggle (item, callback = null) {
     const ref = callback || item
@@ -556,7 +590,7 @@ export default class Model {
 
   /**
    * Valid a list of fields
-   * @param {array} fieldlist list of fieldname
+   * @param {Array<string>} fieldlist list of fieldname
    * @return {object} errors
    */
   _getValidationErrors (fieldlist) {
@@ -635,7 +669,7 @@ export default class Model {
 
   /**
    * Valid a list of fields
-   * @param {array} fieldlist list of fieldname
+   * @param {Array<string>} fieldlist list of fieldname
    * @return {boolean} result of fields validation
    */
   valid (fieldlist) {
@@ -657,6 +691,7 @@ export default class Model {
   /**
    * Check validation status of a validated field
    * @param {string} fieldname
+   * @returns {boolean}
    */
   error (fieldname) {
     return (
@@ -669,15 +704,15 @@ export default class Model {
   * HTTP
   *****************************************************************/
 
-  static _hasMatchedCollectionPattern (serverData) {
-    return (
-      has(serverData, this.collectionCountKey) &&
-      has(serverData, this.collectionDataKey)
-    )
-  }
-
-  static _buildRequestUrl ({ pathname, searchParams }) {
-    let requestUrl = joinPaths(this.baseUrl, this.endpoint, pathname)
+  /**
+   * Build the request url to pass to the fetch method
+   * @param {object} options
+   * @param {string} options.pathname
+   * @param {object} options.searchParams
+   * @returns {string}
+   */
+  _buildRequestUrl ({ pathname, searchParams }) {
+    let requestUrl = joinPaths(this.constructor.baseUrl, this.constructor.endpoint, pathname)
 
     if (searchParams) {
       requestUrl += `?${
@@ -696,7 +731,14 @@ export default class Model {
     return requestUrl
   }
 
-  static async _buildRequestInit (data, options = {}) {
+  /**
+   * Build the request init to pass to the fetch method
+   * @param {object} options
+   * @param {string} options.method
+   * @param {object} options.signal
+   * @returns {RequestInit}
+   */
+  async _buildRequestInit (options = {}) {
     const requestInit = {
       mode: 'cors',
       headers: {
@@ -706,11 +748,11 @@ export default class Model {
     }
 
     // Set Authorization header for private api
-    if (this.authentication) {
-      const token = await this.authentication()
+    if (this.constructor.authentication) {
+      const token = await this.constructor.authentication()
 
       if (!token) {
-        throw new Error(`[Restinfront][${this.name}][Fetch] Impossible to retrieve the auth token`)
+        throw new Error(`[Restinfront][${this.constructor.name}][Fetch] Impossible to retrieve the auth token`)
       }
 
       requestInit.headers['Authorization'] = `Bearer ${token}`
@@ -718,7 +760,7 @@ export default class Model {
 
     if (['POST', 'PUT', 'PATCH'].includes(requestInit.method)) {
       // Extract validated data only
-      requestInit.body = data.toJSON({ removeInvalid: true })
+      requestInit.body = JSON.stringyfy(this.beforeSerialize({ removeInvalid: true }))
     }
 
     return requestInit
@@ -726,16 +768,20 @@ export default class Model {
 
   /**
    * Proceed to the HTTP request
+   * @param {object} options
+   * @param {GET|POST|PUT|PATCH|DELETE} options.method
+   * @returns {Promise<Model>}
    */
   async fetch (options) {
     if (!this.constructor.endpoint) {
-      throw new Error(`[Restinfront][Fetch] \`endpoint\` is required to perform a request`)
+      throw new Error(`[Restinfront][Fetch] an \`endpoint\` is required to perform a request`)
     }
 
-    // Save fetch details
+    // Reset fetch memoization
     this.$restinfront.fetch.options = options
+    this.$restinfront.fetch.response = null
 
-    // Set states to inprogress
+    // Reset fetch states
     if (options.method === 'GET') {
       this.$restinfront.fetch.getProgressing = true
       this.$restinfront.fetch.getFailed = false
@@ -746,81 +792,88 @@ export default class Model {
       this.$restinfront.fetch.saveSucceeded = false
     }
 
-    // Allow fetch request to be aborted
+    // Build fetch params
     const abortController = new AbortController()
-    const requestUrl = this.constructor._buildRequestUrl(options)
-    const requestInit = await this.constructor._buildRequestInit(this, { method: options.method, signal: abortController.signal })
-    // Prepare fetch request
-    const fetchRequest = new Request(requestUrl, requestInit)
-    let fetchResponse
-
-    this.$restinfront.fetch.request = fetchRequest
+    const requestUrl = this._buildRequestUrl(options)
+    const requestInit = await this._buildRequestInit({
+      method: options.method,
+      signal: abortController.signal
+    })
+    const abortTimeout = setTimeout(() => {
+      abortController.abort()
+    }, 20000)
 
     try {
-      const abortTimeout = setTimeout(() => {
-        abortController.abort()
-      }, 20000)
-
       // Proceed to api call
       // https://developer.mozilla.org/fr/docs/Web/API/Fetch_API
-      fetchResponse = await fetch(fetchRequest)
+      this.$restinfront.fetch.response = await fetch(requestUrl, requestInit)
 
       clearTimeout(abortTimeout)
 
-      this.$restinfront.fetch.response = fetchResponse
-
       // Server side errors raise an exception
-      if (!fetchResponse.ok) {
-        throw new Error()
+      if (!this.$restinfront.fetch.response.ok) {
+        throw new Error(`[Restinfront][fetch] the response status is ${this.$restinfront.fetch.response.status}`)
       }
-    } catch (err) {
-      this.constructor.onFetchError(fetchResponse)
+
+      // Set states to success
+      if (options.method === 'GET') {
+        this.$restinfront.fetch.getSucceeded = true
+        this.$restinfront.fetch.getSucceededOnce = true
+      } else {
+        this.$restinfront.fetch.saveSucceeded = true
+      }
+    } catch (error) {
+      this.constructor.onFetchError({ error, response: this.$restinfront.fetch.response })
 
       // Set states to failure
       if (options.method === 'GET') {
-        this.$restinfront.fetch.getProgressing = false
         this.$restinfront.fetch.getFailed = true
       } else {
-        this.$restinfront.saveProgressing = false
-        this.$restinfront.saveFailed = true
+        this.$restinfront.fetch.saveFailed = true
+      }
+    }
+
+    // Process server data if fetch is successful
+    if (
+      this.$restinfront.fetch.getSucceeded ||
+      this.$restinfront.fetch.saveSucceeded
+    ) {
+      // Get data from server response
+      const serverData = await this.$restinfront.fetch.response.json()
+
+      let data = serverData
+      const dataOptions = {
+        isNew: false
       }
 
-      return Promise.resolve(this)
+      if (
+        has(serverData, this.collectionCountKey) &&
+        has(serverData, this.collectionDataKey)
+      ) {
+        data = serverData[this.constructor.collectionDataKey]
+        dataOptions.count = serverData[this.constructor.collectionCountKey]
+      }
+
+      const formattedData = new this.constructor(data, dataOptions)
+      this._mutateData(formattedData)
     }
 
-    // Get data from server response
-    const serverData = await fetchResponse.json()
 
-    let data = serverData
-    const dataOptions = {
-      isNew: false
-    }
-
-    if (this.constructor._hasMatchedCollectionPattern(serverData)) {
-      data = serverData[this.constructor.collectionDataKey]
-      dataOptions.count = serverData[this.constructor.collectionCountKey]
-    }
-
-    const formattedData = new this.constructor(data, dataOptions)
-    this._mutateData(formattedData)
-
-    // Set states to success
+    // Progressing done
     if (options.method === 'GET') {
       this.$restinfront.fetch.getProgressing = false
-      this.$restinfront.fetch.getSucceeded = true
-      this.$restinfront.fetch.getSucceededOnce = true
     } else {
       this.$restinfront.fetch.saveProgressing = false
-      this.$restinfront.fetch.saveSucceeded = true
     }
-
-    return Promise.resolve(this)
   }
 
   /**
    * Retrieve a single item or a collection
+   * @param {string|object} pathname - Pathname is optional for collection. If it's an object, it's more likely searchParams
+   * @param {object} searchParams
+   * @returns {void}
    */
-  get (pathname = '', searchParams = {}) {
+  async get (pathname = '', searchParams = {}) {
     if (this.isCollection) {
       // Pathname is optional for collection
       // If pathname is an object, it's more likely searchParams
@@ -830,14 +883,10 @@ export default class Model {
       }
 
       // Params
-      if (!searchParams.limit) {
-        searchParams.limit = 20
-      }
-      if (!searchParams.offset) {
-        searchParams.offset = 0
-      }
+      searchParams.limit ??= 20
+      searchParams.offset ??= 0
 
-      return this.fetch({
+      await this.fetch({
         method: 'GET',
         pathname: pathname,
         searchParams: searchParams,
@@ -848,7 +897,7 @@ export default class Model {
         throw new Error(`[Restinfront][Fetch] pathname is required in .get() method`)
       }
 
-      return this.fetch({
+      await this.fetch({
         method: 'GET',
         pathname: pathname
       })
@@ -857,13 +906,14 @@ export default class Model {
 
   /**
    * Extend a collection with more items
+   * @returns {void}
    */
   async getMore () {
     this._allowCollection()
 
     this.$restinfront.fetch.options.searchParams.offset += this.$restinfront.fetch.options.searchParams.limit
 
-    return this.fetch({
+    await this.fetch({
       method: 'GET',
       pathname: this.$restinfront.fetch.options.pathname,
       searchParams: this.$restinfront.fetch.options.searchParams,
@@ -873,11 +923,13 @@ export default class Model {
 
   /**
    * Create a new item
+   * @param {string} pathname
+   * @returns {void}
    */
-  post (pathname = '') {
-    this._allowSingleItem()
+  async post (pathname = '') {
+    this._denyCollection()
 
-    return this.fetch({
+    await this.fetch({
       method: 'POST',
       pathname: pathname
     })
@@ -885,11 +937,13 @@ export default class Model {
 
   /**
    * Update an item
+   * @param {string} pathname
+   * @returns {void}
    */
-  put (pathname = '') {
-    this._allowSingleItem()
+  async put (pathname = '') {
+    this._denyCollection()
 
-    return this.fetch({
+    await this.fetch({
       method: 'PUT',
       pathname: joinPaths(this[this.constructor.primaryKeyFieldname], pathname)
     })
@@ -897,11 +951,13 @@ export default class Model {
 
   /**
    * Partial update of an item
+   * @param {string} pathname
+   * @returns {void}
    */
-  patch (pathname = '') {
-    this._allowSingleItem()
+  async patch (pathname = '') {
+    this._denyCollection()
 
-    return this.fetch({
+    await this.fetch({
       method: 'PATCH',
       pathname: joinPaths(this[this.constructor.primaryKeyFieldname], pathname)
     })
@@ -909,12 +965,16 @@ export default class Model {
 
   /**
    * Create or update the item depends of if it comes from db or not
+   * @param {string} pathname
+   * @returns {void}
    */
-  save (pathname = '') {
-    this._allowSingleItem()
+  async save (pathname = '') {
+    this._denyCollection()
 
-    return this.$restinfront.isNew
-      ? this.post(pathname)
-      : this.put(pathname)
+    if (this.$restinfront.isNew) {
+      await this.post(pathname)
+    } else {
+      await this.put(pathname)
+    }
   }
 }
