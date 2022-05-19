@@ -8,9 +8,15 @@ import joinPaths from './utils/joinPaths.js'
 import processUserInput from './utils/processUserInput.js'
 
 
+class RestinfrontError extends Error {
+  constructor(message) {
+    super(`[Restinfront] ${message}`);
+    this.name = this.constructor.name;
+  }
+}
+
 const COLLECTION_SYMBOL = Symbol.for('collection')
 const COLLECTION_KEY = 'collection'
-
 
 export default class Model {
   static baseUrl = ''
@@ -34,8 +40,8 @@ export default class Model {
    * @param {string} [options.endpoint]
    * @param {string} [options.collectionDataKey]
    * @param {string} [options.collectionCountKey]
-   * @param {function|boolean} [options.authentication]
-   * @param {object} [options.schema]
+   * @param {function|false} [options.authentication]
+   * @param {object|false} [options.schema]
    * @param {function} [options.onValidationError]
    * @param {function} [options.onFetchError]
    * @returns {Model}
@@ -46,7 +52,7 @@ export default class Model {
       userInput: options,
       assign: (prop) => this[prop] = options[prop],
       onError: (message) => {
-        throw new Error(`[Restinfront] ${message}`)
+        throw new RestinfrontError(`init: ${message}`)
       },
       specifications: {
         baseUrl: { type: 'string' },
@@ -56,54 +62,56 @@ export default class Model {
         authentication: { type: ['function', 'boolean'] },
         schema: { type: ['object', 'boolean'] },
         onValidationError: { type: 'function' },
-        onFetchError: { type: 'function' },
+        onFetchError: { type: 'function' }
       }
     })
 
     // Parse schema fields to set default values for each option
-    if (this.schema) for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
-      // Type is a required param
-      if (!('type' in fieldconf)) {
-        throw new Error(`[Restinfront][${this.name}] \`type\` is missing on field '${fieldname}'`)
+    if (this.schema) {
+      // Clone the schema before mutating it
+      this.schema = structuredClone(this.schema)
+
+      for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
+        // Type is a required param
+        if (!('type' in fieldconf)) {
+          throw new RestinfrontError(`\`type\` field attribute is required on \`${fieldname}\` field of ${this.name} model`)
+        }
+
+        // Set the primary key
+        if (fieldconf.primaryKey) {
+          this.primaryKeyFieldname = fieldname
+        }
+
+        // Define the default value
+        const defaultValue = 'defaultValue' in fieldconf
+          ? fieldconf.defaultValue
+          : fieldconf.type.defaultValue
+        // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
+        fieldconf.defaultValue = isFunction(defaultValue)
+          ? defaultValue
+          : () => defaultValue
+
+        // Default blank is restricted
+        const allowBlank = 'allowBlank' in fieldconf
+          ? fieldconf.allowBlank
+          : false
+        // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
+        fieldconf.allowBlank = isFunction(allowBlank)
+          ? allowBlank
+          : () => allowBlank
+
+        // Default valid method is permissive
+        if (!('isValid' in fieldconf)) {
+          fieldconf.isValid = () => true
+        }
+
+        // Require validation as a default except for primary key and timestamp fields
+        fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
       }
-
-      // Set the primary key
-      if (fieldconf.primaryKey) {
-        this.primaryKeyFieldname = fieldname
+      
+      if (this.primaryKeyFieldname === null) {
+        console.warn(new RestinfrontError(`\`primaryKey\` field attribute is missing on ${this.name} model. This can lead to unexpected behavior.`))
       }
-
-      // Define the default value
-      const defaultValue = 'defaultValue' in fieldconf
-        ? fieldconf.defaultValue
-        : fieldconf.type.defaultValue
-      // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
-      fieldconf.defaultValue = isFunction(defaultValue)
-        ? defaultValue
-        : () => defaultValue
-
-      // Default blank is restricted
-      const allowBlank = 'allowBlank' in fieldconf
-        ? fieldconf.allowBlank
-        : false
-      // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
-      fieldconf.allowBlank = isFunction(allowBlank)
-        ? allowBlank
-        : () => allowBlank
-
-      // Default valid method is permissive
-      if (!('isValid' in fieldconf)) {
-        fieldconf.isValid = () => true
-      }
-
-      // Require validation as a default except for primary key and timestamp fields
-      fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
-    }
-
-    if (
-      this.schema &&
-      this.primaryKeyFieldname === null
-    ) {
-      console.warn(`[Restinfront][${this.name}] \`primaryKey\` field attribute is missing on the model. This can lead to unexpected behavior.`)
     }
 
     return this
@@ -176,10 +184,17 @@ export default class Model {
       fetch: {
         options: null,
         response: null,
-        getProgressing: false,
-        getSucceededOnce: false,
-        getSucceeded: false,
-        getFailed: false
+        states: {
+          progressing: false,
+          succeeded: false,
+          succeededOnce: false,
+          failed: false,
+          get: {
+            progressing: false,
+            succeeded: false,
+            failed: false
+          }
+        }
       }
     }
 
@@ -188,14 +203,16 @@ export default class Model {
       // Add single item specific properties
       this.$restinfront.isNew = options.isNew ?? true
       this.$restinfront.validator = this.constructor._buildValidator()
-      this.$restinfront.saveProgressing = false
-      this.$restinfront.saveSucceeded = false
-      this.$restinfront.saveFailed = false
+      this.$restinfront.fetch.save = {
+        progressing: false,
+        succeeded: false,
+        failed: false
+      }
 
       // Build a raw item if it's a new instance
       if (
-        this.constructor.schema &&
-        this.$restinfront.isNew
+        this.$restinfront.isNew &&
+        this.constructor.schema
       ) {
         data = this.constructor._buildRawItem(data)
       }
@@ -246,32 +263,8 @@ export default class Model {
     return this.$restinfront.isNew
   }
 
-  get getProgressing () {
-    return this.$restinfront.fetch.getProgressing
-  }
-
-  get getSucceededOnce () {
-    return this.$restinfront.fetch.getSucceededOnce
-  }
-
-  get getSucceeded () {
-    return this.$restinfront.fetch.getSucceeded
-  }
-
-  get getFailed () {
-    return this.$restinfront.fetch.getFailed
-  }
-
-  get saveProgressing () {
-    return this.$restinfront.fetch.saveProgressing
-  }
-
-  get saveSucceeded () {
-    return this.$restinfront.fetch.saveSucceeded
-  }
-
-  get saveFailed () {
-    return this.$restinfront.fetch.saveFailed
+  get $fetch () {
+    return this.$restinfront.fetch.states
   }
 
   /**
@@ -280,7 +273,7 @@ export default class Model {
    */
   _allowCollection () {
     if (!this.isCollection) {
-      throw new Error('[Restinfront] This function MUST be used by a collection instance')
+      throw new RestinfrontError('This function MUST be called by a collection instance')
     }
   }
 
@@ -290,7 +283,7 @@ export default class Model {
    */
   _denyCollection () {
     if (this.isCollection) {
-      throw new Error('[Restinfront] This function CANNOT be used by a collection instance')
+      throw new RestinfrontError('This function CANNOT be called by a collection instance')
     }
   }
 
@@ -311,7 +304,7 @@ export default class Model {
   _mutateData (newData) {
     if (newData.isCollection) {
       // Extend the list or just replace it
-      if (this.$restinfront.fetch?.options?.extend) {
+      if (this.$restinfront.fetch.options?.extend) {
         newData.forEach(newItem => this.add(newItem))
       } else {
         this._setCollection(newData.items())
@@ -594,20 +587,7 @@ export default class Model {
    * @return {object} errors
    */
   _getValidationErrors (fieldlist) {
-    if (!isArray(fieldlist)) {
-      throw new Error(`[Restinfront][Validation] .valid() params must be an array`)
-    }
-
-    let errors = null
-
-    const mergeErrors = (fieldname, error) => {
-      if (error) {
-        if (!errors) {
-          errors = {}
-        }
-        errors[fieldname] = error
-      }
-    }
+    const errors = new Map()
 
     // Check user defined validation
     for (const fielditem of fieldlist) {
@@ -619,15 +599,10 @@ export default class Model {
           this.$restinfront.validator[fieldname].checked = true
 
           if (this.$restinfront.validator[fieldname].isValid(this[fieldname], this) === false) {
-            mergeErrors(fieldname, {
-              value: this[fieldname],
-              error: 'NOT_VALID'
-            })
+            errors.set(fieldname, { value: this[fieldname], error: 'NOT_VALID' })
           }
         } else {
-          mergeErrors(fieldname, {
-            error: 'NOT_FOUND'
-          })
+          errors.set(fieldname, { error: 'NOT_FOUND' })
         }
       // Recursive validation for associations
       } else if (isArray(fielditem)) {
@@ -636,31 +611,38 @@ export default class Model {
 
         if (has(this, fieldname)) {
           this.$restinfront.validator[fieldname].checked = true
-          mergeErrors(fieldname, this._getValidationErrors([fieldname]))
+          let associationErrors
 
           if (fieldlist) {
             switch (this.constructor.schema[fieldname].type.association) {
               case 'BelongsTo':
               case 'HasOne':
                 if (this[fieldname] !== null) {
-                  mergeErrors(fieldname, this[fieldname]._getValidationErrors(fieldlist))
+                  associationErrors = this[fieldname]._getValidationErrors(fieldlist)
                 }
                 break
               case 'HasMany':
                 // Check if each item of the collection is valid
-                this[fieldname].forEach(item => {
-                  mergeErrors(fieldname, item._getValidationErrors(fieldlist))
-                })
+                associationErrors = this[fieldname]
+                  .map(item => item._getValidationErrors(fieldlist))
+                  .filter(errors => errors.size > 0)
                 break
             }
+          } else {
+            associationErrors = this._getValidationErrors([fieldname])
+          }
+
+          if (
+            associationErrors.length > 0 ||
+            associationErrors.size > 0
+          ) {
+            errors.set(fieldname, associationErrors)
           }
         } else {
-          mergeErrors(fieldname, {
-            error: 'NOT_FOUND'
-          })
+          errors.set(fieldname, { error: 'NOT_FOUND' })
         }
       } else {
-        throw new Error('[Restinfront][Validation] Syntax error')
+        throw new RestinfrontError('valid: param syntax error')
       }
     }
 
@@ -673,13 +655,19 @@ export default class Model {
    * @return {boolean} result of fields validation
    */
   valid (fieldlist) {
+    this._denyCollection()
+
+    if (!isArray(fieldlist)) {
+      throw new RestinfrontError('valid: param MUST be an array')
+    }
+
     // Reset save states
-    this.$restinfront.fetch.saveProgressing = false
-    this.$restinfront.fetch.saveFailed = false
-    this.$restinfront.fetch.saveSucceeded = false
+    this.$restinfront.fetch.save.progressing = false
+    this.$restinfront.fetch.save.succeeded = false
+    this.$restinfront.fetch.save.failed = false
     // Proceed to deep validation
     const errors = this._getValidationErrors(fieldlist)
-    const isValid = errors === null
+    const isValid = errors.size === 0
 
     if (!isValid) {
       this.constructor.onValidationError(errors)
@@ -694,6 +682,7 @@ export default class Model {
    * @returns {boolean}
    */
   error (fieldname) {
+
     return (
       this.$restinfront.validator[fieldname].checked &&
       !this.$restinfront.validator[fieldname].isValid(this[fieldname], this)
@@ -752,7 +741,7 @@ export default class Model {
       const token = await this.constructor.authentication()
 
       if (!token) {
-        throw new Error(`[Restinfront][${this.constructor.name}][Fetch] Impossible to retrieve the auth token`)
+        throw new RestinfrontError(`fetch: \`authentication\` returned an invalid token (${token})`)
       }
 
       requestInit.headers['Authorization'] = `Bearer ${token}`
@@ -774,7 +763,7 @@ export default class Model {
    */
   async fetch (options) {
     if (!this.constructor.endpoint) {
-      throw new Error(`[Restinfront][Fetch] an \`endpoint\` is required to perform a request`)
+      throw new RestinfrontError(`fetch: an \`endpoint\` is required to perform a request`)
     }
 
     // Reset fetch memoization
@@ -782,14 +771,18 @@ export default class Model {
     this.$restinfront.fetch.response = null
 
     // Reset fetch states
+    this.$restinfront.fetch.states.progressing = true
+    this.$restinfront.fetch.states.failed = false
+    this.$restinfront.fetch.states.succeeded = false
+
     if (options.method === 'GET') {
-      this.$restinfront.fetch.getProgressing = true
-      this.$restinfront.fetch.getFailed = false
-      this.$restinfront.fetch.getSucceeded = false
+      this.$restinfront.fetch.states.get.progressing = true
+      this.$restinfront.fetch.states.get.failed = false
+      this.$restinfront.fetch.states.get.succeeded = false
     } else {
-      this.$restinfront.fetch.saveProgressing = true
-      this.$restinfront.fetch.saveFailed = false
-      this.$restinfront.fetch.saveSucceeded = false
+      this.$restinfront.fetch.states.save.progressing = true
+      this.$restinfront.fetch.states.save.failed = false
+      this.$restinfront.fetch.states.save.succeeded = false
     }
 
     // Build fetch params
@@ -812,32 +805,31 @@ export default class Model {
 
       // Server side errors raise an exception
       if (!this.$restinfront.fetch.response.ok) {
-        throw new Error(`[Restinfront][fetch] the response status is ${this.$restinfront.fetch.response.status}`)
+        throw new RestinfrontError(`fetch: the server responded with an error status code (${this.$restinfront.fetch.response.status})`)
       }
 
       // Set states to success
+      this.$restinfront.fetch.states.succeeded = true
+      this.$restinfront.fetch.states.succeededOnce = true
       if (options.method === 'GET') {
-        this.$restinfront.fetch.getSucceeded = true
-        this.$restinfront.fetch.getSucceededOnce = true
+        this.$restinfront.fetch.states.get.succeeded = true
       } else {
-        this.$restinfront.fetch.saveSucceeded = true
+        this.$restinfront.fetch.states.save.succeeded = true
       }
     } catch (error) {
       this.constructor.onFetchError({ error, response: this.$restinfront.fetch.response })
 
       // Set states to failure
+      this.$restinfront.fetch.states.failed = true
       if (options.method === 'GET') {
-        this.$restinfront.fetch.getFailed = true
+        this.$restinfront.fetch.states.get.failed = true
       } else {
-        this.$restinfront.fetch.saveFailed = true
+        this.$restinfront.fetch.states.save.failed = true
       }
     }
 
     // Process server data if fetch is successful
-    if (
-      this.$restinfront.fetch.getSucceeded ||
-      this.$restinfront.fetch.saveSucceeded
-    ) {
+    if (this.$restinfront.fetch.states.succeeded) {
       // Get data from server response
       const serverData = await this.$restinfront.fetch.response.json()
 
@@ -858,12 +850,11 @@ export default class Model {
       this._mutateData(formattedData)
     }
 
-
     // Progressing done
     if (options.method === 'GET') {
-      this.$restinfront.fetch.getProgressing = false
+      this.$restinfront.fetch.states.get.progressing = false
     } else {
-      this.$restinfront.fetch.saveProgressing = false
+      this.$restinfront.fetch.states.save.progressing = false
     }
   }
 
@@ -894,7 +885,7 @@ export default class Model {
       })
     } else {
       if (!pathname) {
-        throw new Error(`[Restinfront][Fetch] pathname is required in .get() method`)
+        throw new RestinfrontError(`get: \`pathname\` param is required`)
       }
 
       await this.fetch({
