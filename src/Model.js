@@ -63,10 +63,10 @@ export default class Model {
       }
     })
 
-    // Set options 
+    // Set options
     [
-      'baseUrl', 
-      'endpoint', 
+      'baseUrl',
+      'endpoint',
       'collectionDataKey',
       'collectionCountKey',
       'authentication',
@@ -121,7 +121,7 @@ export default class Model {
         // Require validation as a default except for primary key and timestamp fields
         fieldconf.autoChecked ??= fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
       }
-      
+
       if (this.primaryKeyFieldname === null) {
         console.warn(new RestinfrontError(`\`primaryKey\` field attribute is missing on ${this.name} model. This can lead to unexpected behavior.`))
       }
@@ -374,7 +374,7 @@ export default class Model {
    * @param {object} options
    * @param {boolean} [options.removeInvalid]
    */
-   _beforeSerializeItem (options = {}) {
+  _beforeSerializeItem (options = {}) {
     const removeInvalid = options.removeInvalid ?? false
 
     const newItem = {}
@@ -521,7 +521,7 @@ export default class Model {
    * @param {string|function|object} ref
    * @returns {object|null}
    */
-   find (ref) {
+  find (ref) {
     return this.items().find(this.constructor._getCollectionCallback(ref)) || null
   }
 
@@ -697,7 +697,6 @@ export default class Model {
    * @returns {boolean}
    */
   error (fieldname) {
-
     return (
       this.$restinfront.validator[fieldname].checked &&
       !this.$restinfront.validator[fieldname].isValid(this[fieldname], this)
@@ -778,7 +777,7 @@ export default class Model {
    */
   async fetch (options) {
     if (!this.constructor.endpoint) {
-      throw new RestinfrontError(`fetch: an \`endpoint\` is required to perform a request`)
+      throw new RestinfrontError(`fetch: an \`endpoint\` is required on model \`${this.constructor.name}\` to perform a request`)
     }
 
     // Reset fetch memoization
@@ -893,19 +892,22 @@ export default class Model {
       searchParams.offset ??= 0
 
       await this.fetch({
+        extend: false,
         method: 'GET',
-        pathname: pathname,
-        searchParams: searchParams,
-        extend: false
+        pathname,
+        searchParams
       })
     } else {
-      if (!pathname) {
-        throw new RestinfrontError(`get: \`pathname\` param is required`)
-      }
+      typecheck({
+        pathname: {
+          type: 'string',
+          required: true
+        }
+      })
 
       await this.fetch({
         method: 'GET',
-        pathname: pathname
+        pathname
       })
     }
   }
@@ -920,10 +922,10 @@ export default class Model {
     this.$restinfront.fetch.options.searchParams.offset += this.$restinfront.fetch.options.searchParams.limit
 
     await this.fetch({
+      extend: true,
       method: 'GET',
       pathname: this.$restinfront.fetch.options.pathname,
-      searchParams: this.$restinfront.fetch.options.searchParams,
-      extend: true
+      searchParams: this.$restinfront.fetch.options.searchParams
     })
   }
 
@@ -937,7 +939,7 @@ export default class Model {
 
     await this.fetch({
       method: 'POST',
-      pathname: pathname
+      pathname
     })
   }
 
