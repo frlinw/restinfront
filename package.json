@@ -1,5 +1,4 @@
 {
-  "private": false,
   "name": "restinfront",
   "version": "3.0.0",
   "description": "Model based REST Api Manager",
@@ -22,9 +21,12 @@
   },
   "main": "index.js",
   "module": "index.js",
+  "dependencies": {
+    "utilib": "github:madmoizo/utilib"
+  },
   "devDependencies": {
-    "eslint": "^8.12.0",
-    "eslint-config-standard": "^16.0.3",
+    "eslint": "^8.15.0",
+    "eslint-config-standard": "^17.0.0",
     "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^6.0.0"
