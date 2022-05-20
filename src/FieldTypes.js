@@ -6,6 +6,7 @@ import {
   isDate,
   isEmail,
   isFile,
+  isFunction,
   isInteger,
   isIp,
   isNull,
@@ -27,7 +28,7 @@ const FIELDTYPES_PRESETS = {
   STRING: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value),
+    isValid: (value) => isString(value)
   },
   UUID: {
     defaultValue: () => crypto.randomUUID(),
@@ -37,7 +38,7 @@ const FIELDTYPES_PRESETS = {
   EMAIL: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value) && isEmail(value),
+    isValid: (value) => isString(value) && isEmail(value)
   },
   PHONE: {
     defaultValue: () => '',
@@ -169,7 +170,7 @@ const FIELDTYPES_PRESETS = {
   OBJECT: {
     defaultValue: () => ({}),
     isBlank: (value) => isObjectEmpty(value),
-    isValid: (value) => isObject(value),
+    isValid: (value) => isObject(value)
   },
   //
   // Array
@@ -177,7 +178,7 @@ const FIELDTYPES_PRESETS = {
   ARRAY: {
     defaultValue: () => ([]),
     isBlank: (value) => value.length === 0,
-    isValid: (value) => isArray(value),
+    isValid: (value) => isArray(value)
   },
   //
   // Associations
@@ -254,7 +255,7 @@ const FIELDTYPES_PRESETS = {
     model: Model,
     association: 'BelongsTo'
   })
-} 
+}
 
 export default class FieldTypes {
   static {
@@ -292,7 +293,7 @@ export default class FieldTypes {
     this[name] = isFunction(options)
       ? options
       : { ...options }
-    
+
     if (!has(options, 'beforeSerialize')) {
       this[name].beforeSerialize = (value) => value
     }
