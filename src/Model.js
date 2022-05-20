@@ -1,19 +1,15 @@
-import has from './utils/has.js'
-import isFunction from './utils/isFunction.js'
-import isArray from './utils/isArray.js'
-import isObject from './utils/isObject.js'
-import isString from './utils/isString.js'
-import isDate from './utils/isDate.js'
-import joinPaths from './utils/joinPaths.js'
-import processUserInput from './utils/processUserInput.js'
+import RestinfrontError from './RestinfrontError.js'
+import {
+  has,
+  isArray,
+  isDate,
+  isFunction,
+  isObject,
+  isString,
+  joinPaths,
+  typecheck
+} from 'utilib'
 
-
-class RestinfrontError extends Error {
-  constructor(message) {
-    super(`[Restinfront] ${message}`);
-    this.name = this.constructor.name;
-  }
-}
 
 const COLLECTION_SYMBOL = Symbol.for('collection')
 const COLLECTION_KEY = 'collection'
@@ -47,22 +43,39 @@ export default class Model {
    * @returns {Model}
    */
   static init (options = {}) {
-    // Throw an error if user input does not match the spec
-    processUserInput({
-      userInput: options,
-      assign: (prop) => this[prop] = options[prop],
+    typecheck({
+      options: {
+        value: options,
+        type: ['object', {
+          baseUrl: { type: 'string' },
+          endpoint: { type: 'string' },
+          collectionDataKey: { type: 'string' },
+          collectionCountKey: { type: 'string' },
+          authentication: { type: ['function', 'false'] },
+          schema: { type: ['object', 'false'] },
+          onValidationError: { type: 'function' },
+          onFetchError: { type: 'function' }
+        }]
+      }
+    }, {
       onError: (message) => {
         throw new RestinfrontError(`init: ${message}`)
-      },
-      specifications: {
-        baseUrl: { type: 'string' },
-        endpoint: { type: 'string' },
-        collectionDataKey: { type: 'string' },
-        collectionCountKey: { type: 'string' },
-        authentication: { type: ['function', 'boolean'] },
-        schema: { type: ['object', 'boolean'] },
-        onValidationError: { type: 'function' },
-        onFetchError: { type: 'function' }
+      }
+    })
+
+    // Set options 
+    [
+      'baseUrl', 
+      'endpoint', 
+      'collectionDataKey',
+      'collectionCountKey',
+      'authentication',
+      'schema',
+      'onValidationError',
+      'onFetchError'
+    ].forEach(prop => {
+      if (has(options, prop)) {
+        this[prop] = options[prop]
       }
     })
 
@@ -73,7 +86,7 @@ export default class Model {
 
       for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
         // Type is a required param
-        if (!('type' in fieldconf)) {
+        if (!has(fieldconf, 'type')) {
           throw new RestinfrontError(`\`type\` field attribute is required on \`${fieldname}\` field of ${this.name} model`)
         }
 
@@ -83,7 +96,7 @@ export default class Model {
         }
 
         // Define the default value
-        const defaultValue = 'defaultValue' in fieldconf
+        const defaultValue = has(fieldconf, 'defaultValue')
           ? fieldconf.defaultValue
           : fieldconf.type.defaultValue
         // Optimization: Ensure defaultValue is a function (avoid type check on runtime)
@@ -92,7 +105,7 @@ export default class Model {
           : () => defaultValue
 
         // Default blank is restricted
-        const allowBlank = 'allowBlank' in fieldconf
+        const allowBlank = has(fieldconf, 'allowBlank')
           ? fieldconf.allowBlank
           : false
         // Optimization: Ensure allowBlank is a function (avoid type check on runtime)
@@ -101,12 +114,12 @@ export default class Model {
           : () => allowBlank
 
         // Default valid method is permissive
-        if (!('isValid' in fieldconf)) {
+        if (!has(fieldconf, 'isValid')) {
           fieldconf.isValid = () => true
         }
 
         // Require validation as a default except for primary key and timestamp fields
-        fieldconf.autoChecked = fieldconf.autoChecked || fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
+        fieldconf.autoChecked ??= fieldconf.primaryKey || ['createdAt', 'updatedAt'].includes(fieldname) || false
       }
       
       if (this.primaryKeyFieldname === null) {
@@ -122,6 +135,19 @@ export default class Model {
   *****************************************************************/
 
   /**
+   * Define the callback for custom collection methods
+   */
+  static _getCollectionCallback (ref) {
+    if (isFunction(ref)) {
+      return ref
+    } else if (isString(ref)) {
+      return (item) => item[this.primaryKeyFieldname] === ref
+    } else if (isObject(ref)) {
+      return (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
+    }
+  }
+
+  /**
    * Build an item based on the schema and filled with default values
    * @param {object} item
    * @returns {object}
@@ -132,13 +158,13 @@ export default class Model {
     // Build the item with default values
     const primaryKey = item['primaryKey'] || item[this.primaryKeyFieldname] || this.schema[this.primaryKeyFieldname].defaultValue()
 
-    for (const fieldname in this.schema) {
+    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
       if (fieldname === this.primaryKeyFieldname) {
         rawItem[fieldname] = primaryKey
       } else if (has(item, fieldname)) {
         rawItem[fieldname] = item[fieldname]
       } else {
-        rawItem[fieldname] = this.schema[fieldname].defaultValue(primaryKey) // primaryKey argument is necessary for HASONE datatype
+        rawItem[fieldname] = fieldconf.defaultValue(primaryKey) // primaryKey argument is necessary for HASONE fieldtype
       }
     }
 
@@ -386,17 +412,6 @@ export default class Model {
   /*****************************************************************
   * Collection methods
   *****************************************************************/
-
-  /**
-   * Define the callback for custom collection methods
-   */
-  static _getCollectionCallback (ref) {
-    return isFunction(ref)
-      ? ref
-      : isString(ref)
-        ? (item) => item[this.primaryKeyFieldname] === ref
-        : (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
-  }
 
   /**
    * Get the list of items
