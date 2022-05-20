@@ -1,5 +1,5 @@
 export default class RestinfrontError extends Error {
-  constructor(message) {
+  constructor (message) {
     super(`[Restinfront] ${message}`)
     this.name = this.constructor.name
   }
