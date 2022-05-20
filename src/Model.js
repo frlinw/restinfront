@@ -59,12 +59,12 @@ export default class Model {
       }
     }, {
       onError: (message) => {
-        throw new RestinfrontError(`init: ${message}`)
+        throw new RestinfrontError(message)
       }
     })
 
     // Set options
-    [
+    const assignables = [
       'baseUrl',
       'endpoint',
       'collectionDataKey',
@@ -73,7 +73,8 @@ export default class Model {
       'schema',
       'onValidationError',
       'onFetchError'
-    ].forEach(prop => {
+    ]
+    assignables.forEach(prop => {
       if (has(options, prop)) {
         this[prop] = options[prop]
       }
