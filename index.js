@@ -1,2 +1,2 @@
-export { default as Model } from './src/model.js'
-export { default as FieldTypes } from './src/fieldtypes.js'
+export { default as Model } from './src/Model.js'
+export { default as FieldTypes } from './src/Fieldtypes.js'
