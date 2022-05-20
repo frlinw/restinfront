@@ -1,21 +1,26 @@
-import has from './utils/has.js'
-import isBoolean from './utils/isBoolean.js'
-import isArray from './utils/isArray.js'
-import isObject from './utils/isObject.js'
-import isDate from './utils/isDate.js'
-import isNumber from './utils/isNumber.js'
-import isInteger from './utils/isInteger.js'
-import isString from './utils/isString.js'
-import isUrl from './utils/isUrl.js'
-import isEmail from './utils/isEmail.js'
-import isFile from './utils/isFile.js'
-import isIp from './utils/isIp.js'
-import isEmptyObject from './utils/isEmptyObject.js'
-import prependZero from './utils/prependZero.js'
-import parseDate from './utils/parseDate.js'
+import RestinfrontError from './RestinfrontError.js'
+import {
+  has,
+  isArray,
+  isBoolean,
+  isDate,
+  isEmail,
+  isFile,
+  isInteger,
+  isIp,
+  isNull,
+  isNumber,
+  isObject,
+  isObjectEmpty,
+  isString,
+  isUrl,
+  parseDate,
+  prependZero,
+  typecheck
+} from 'utilib'
 
 
-export default {
+const FIELDTYPES_PRESETS = {
   //
   // String
   //
@@ -23,22 +28,16 @@ export default {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
   },
   UUID: {
     defaultValue: () => crypto.randomUUID(),
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
+    isValid: (value) => isString(value)
   },
   EMAIL: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
     isValid: (value) => isString(value) && isEmail(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
   },
   PHONE: {
     defaultValue: () => '',
@@ -57,48 +56,38 @@ export default {
       }
 
       return sanitizedPhone
-    },
-    beforeBuild: (value) => value
+    }
   },
   URL: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value) && isUrl(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
+    isValid: (value) => isString(value) && isUrl(value)
   },
   FILE: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value) && isFile(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
+    isValid: (value) => isString(value) && isFile(value)
   },
   IP: {
     defaultValue: () => '',
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value) && isIp(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
+    isValid: (value) => isString(value) && isIp(value)
   },
   //
   // Boolean
   //
   BOOLEAN: {
     defaultValue: () => null,
-    isBlank: (value) => value === null,
-    isValid: (value) => isBoolean(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
+    isBlank: (value) => isNull(value),
+    isValid: (value) => isBoolean(value)
   },
   //
   // Number
   //
   INTEGER: {
     defaultValue: () => null,
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => isInteger(value) && value >= 0,
-    beforeSerialize: (value) => value,
     beforeBuild: (value) => {
       const parsedValue = Number.parseInt(value)
 
@@ -111,9 +100,8 @@ export default {
   },
   FLOAT: {
     defaultValue: () => null,
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => isNumber(value) && value >= 0,
-    beforeSerialize: (value) => value,
     beforeBuild: (value) => {
       const parsedValue = Number.parseFloat(value)
 
@@ -129,7 +117,7 @@ export default {
   //
   DATEONLY: {
     defaultValue: () => null,
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => isDate(value),
     beforeSerialize: (value) => {
       if (isDate(value)) {
@@ -156,7 +144,7 @@ export default {
   },
   DATE: {
     defaultValue: () => null,
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => isDate(value),
     beforeSerialize: (value) => {
       if (isDate(value)) {
@@ -180,24 +168,8 @@ export default {
   //
   OBJECT: {
     defaultValue: () => ({}),
-    isBlank: (value) => isEmptyObject(value),
+    isBlank: (value) => isObjectEmpty(value),
     isValid: (value) => isObject(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
-  },
-  ADDRESS: {
-    defaultValue: () => ({
-      number: '',
-      route: '',
-      postcode: '',
-      city: '',
-      latitude: '',
-      longitude: ''
-    }),
-    isBlank: (value) => isEmptyObject(value) || value.route === '' || value.postcode === '' || value.city === '',
-    isValid: (value) => isObject(value) && has(value, 'number') && has(value, 'route') && has(value, 'postcode') && has(value, 'city'),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
   },
   //
   // Array
@@ -206,8 +178,6 @@ export default {
     defaultValue: () => ([]),
     isBlank: (value) => value.length === 0,
     isValid: (value) => isArray(value),
-    beforeSerialize: (value) => value,
-    beforeBuild: (value) => value
   },
   //
   // Associations
@@ -238,7 +208,7 @@ export default {
   }),
   HASONE: (Model) => ({
     defaultValue: (primaryKey) => Model._buildRawItem({ primaryKey }),
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
     beforeSerialize: (value, options) => {
       if (value instanceof Model) {
@@ -262,7 +232,7 @@ export default {
   }),
   BELONGSTO: (Model) => ({
     defaultValue: () => Model._buildRawItem(),
-    isBlank: (value) => value === null,
+    isBlank: (value) => isNull(value),
     isValid: (value) => value instanceof Model && has(value, Model.primaryKeyFieldname),
     beforeSerialize: (value, options) => {
       if (value instanceof Model) {
@@ -284,4 +254,86 @@ export default {
     model: Model,
     association: 'BelongsTo'
   })
+} 
+
+export default class Fieldtypes {
+  static {
+    for (const [name, options] of Object.entries(FIELDTYPES_PRESETS)) {
+      this.add(name, options)
+    }
+  }
+
+  /**
+   * Add an new fieldtype
+   * @param {string} name
+   * @param {object} options
+   * @param {function} options.defaultValue
+   * @param {function} options.isBlank
+   * @param {function} options.isValid
+   * @param {function} [options.beforeSerialize]
+   * @param {function} [options.beforeBuild]
+   */
+  static add (name, options) {
+    typecheck({
+      name: {
+        type: 'string'
+      },
+      options: {
+        type: ['function', 'object', {
+          defaultValue: { type: 'function', required: true },
+          isBlank: { type: 'function', required: true },
+          isValid: { type: 'function', required: true },
+          beforeSerialize: { type: 'function' },
+          beforeBuild: { type: 'function' }
+        }]
+      }
+    })
+
+    this[name] = isFunction(options)
+      ? options
+      : { ...options }
+    
+    if (!has(options, 'beforeSerialize')) {
+      this[name].beforeSerialize = (value) => value
+    }
+    if (!has(options, 'beforeBuild')) {
+      this[name].beforeBuild = (value) => value
+    }
+  }
+
+  /**
+   * Override an existing fieldtype
+   * @param {string} name
+   * @param {object} options
+   * @param {function} [options.defaultValue]
+   * @param {function} [options.isBlank]
+   * @param {function} [options.isValid]
+   * @param {function} [options.beforeSerialize]
+   * @param {function} [options.beforeBuild]
+   */
+  static override (name, options) {
+    if (!has(this, name)) {
+      throw new RestinfrontError('override: the fieldtype you are trying to override does not exist')
+    }
+
+    typecheck({
+      name: {
+        type: 'string'
+      },
+      options: {
+        type: ['object', {
+          defaultValue: { type: 'function' },
+          isBlank: { type: 'function' },
+          isValid: { type: 'function' },
+          beforeSerialize: { type: 'function' },
+          beforeBuild: { type: 'function' }
+        }]
+      }
+    })
+
+    this[name] = {
+      ...this[name],
+      ...options
+    }
+  }
 }
