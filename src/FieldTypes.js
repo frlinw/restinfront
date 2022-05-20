@@ -256,7 +256,7 @@ const FIELDTYPES_PRESETS = {
   })
 } 
 
-export default class Fieldtypes {
+export default class FieldTypes {
   static {
     for (const [name, options] of Object.entries(FIELDTYPES_PRESETS)) {
       this.add(name, options)
