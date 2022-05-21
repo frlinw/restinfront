@@ -277,17 +277,20 @@ export default class FieldTypes {
    */
   static add (name, options) {
     typecheck({
-      name: {
-        type: 'string'
-      },
-      options: {
-        type: ['function', 'object', {
-          defaultValue: { type: 'function', required: true },
-          isBlank: { type: 'function', required: true },
-          isValid: { type: 'function', required: true },
-          beforeSerialize: { type: 'function' },
-          beforeBuild: { type: 'function' }
-        }]
+      error: RestinfrontError,
+      params: {
+        name: {
+          type: 'string'
+        },
+        options: {
+          type: ['function', 'object', {
+            defaultValue: { type: 'function', required: true },
+            isBlank: { type: 'function', required: true },
+            isValid: { type: 'function', required: true },
+            beforeSerialize: { type: 'function' },
+            beforeBuild: { type: 'function' }
+          }]
+        }
       }
     })
 
@@ -319,17 +322,20 @@ export default class FieldTypes {
     }
 
     typecheck({
-      name: {
-        type: 'string'
-      },
-      options: {
-        type: ['object', {
-          defaultValue: { type: 'function' },
-          isBlank: { type: 'function' },
-          isValid: { type: 'function' },
-          beforeSerialize: { type: 'function' },
-          beforeBuild: { type: 'function' }
-        }]
+      error: RestinfrontError,
+      params: {
+        name: {
+          type: 'string'
+        },
+        options: {
+          type: ['object', {
+            defaultValue: { type: 'function' },
+            isBlank: { type: 'function' },
+            isValid: { type: 'function' },
+            beforeSerialize: { type: 'function' },
+            beforeBuild: { type: 'function' }
+          }]
+        }
       }
     })
 

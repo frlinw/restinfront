@@ -135,7 +135,10 @@ export default class Model {
     })
 
     // Set options
-    mergeObject({ source: options, target: this })
+    mergeObject({
+      source: options,
+      target: this
+    })
 
     // Parse schema fields to set default values for each option
     if (this.schema) {
