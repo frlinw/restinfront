@@ -15,6 +15,7 @@ import {
   isObjectEmpty,
   isString,
   isUrl,
+  isUUID,
   parseDate,
   prependZero,
   typecheck
@@ -33,7 +34,7 @@ const FIELDTYPES_PRESETS = {
   UUID: {
     defaultValue: () => crypto.randomUUID(),
     isBlank: (value) => value === '',
-    isValid: (value) => isString(value)
+    isValid: (value) => isString(value) && isUUID(value)
   },
   EMAIL: {
     defaultValue: () => '',
