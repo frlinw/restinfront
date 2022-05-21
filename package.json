@@ -1,13 +1,9 @@
 {
   "name": "restinfront",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Model based REST Api Manager",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/madmoizo/restinfront.git"
-  },
   "keywords": [
     "model",
     "rest",
@@ -16,16 +12,20 @@
     "parse",
     "transform"
   ],
-  "scripts": {
-    "lint": "eslint --fix src/**/*.js"
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/madmoizo/restinfront.git"
   },
   "main": "index.js",
   "module": "index.js",
+  "scripts": {
+    "lint": "eslint --fix src/**/*.js"
+  },
   "dependencies": {
     "utilib": "github:madmoizo/utilib"
   },
   "devDependencies": {
-    "eslint": "^8.15.0",
+    "eslint": "^8.16.0",
     "eslint-config-standard": "^17.0.0",
     "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-node": "^11.1.0",
