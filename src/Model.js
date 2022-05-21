@@ -7,6 +7,7 @@ import {
   isObject,
   isString,
   joinPaths,
+  mergeObject,
   typecheck
 } from 'utilib'
 
@@ -115,41 +116,26 @@ export default class Model {
    */
   static init (options = {}) {
     typecheck({
-      options: {
-        value: options,
-        type: ['object', {
-          baseUrl: { type: 'string' },
-          endpoint: { type: 'string' },
-          collectionDataKey: { type: 'string' },
-          collectionCountKey: { type: 'string' },
-          authentication: { type: ['function', 'false'] },
-          schema: { type: ['object', 'false'] },
-          onValidationError: { type: 'function' },
-          onFetchError: { type: 'function' }
-        }]
-      }
-    }, {
-      onError: (message) => {
-        throw new RestinfrontError(message)
+      error: RestinfrontError,
+      params: {
+        options: {
+          value: options,
+          type: ['object', {
+            baseUrl: { type: 'string' },
+            endpoint: { type: 'string' },
+            collectionDataKey: { type: 'string' },
+            collectionCountKey: { type: 'string' },
+            authentication: { type: ['function', 'false'] },
+            schema: { type: ['object', 'false'] },
+            onValidationError: { type: 'function' },
+            onFetchError: { type: 'function' }
+          }]
+        }
       }
     })
 
     // Set options
-    const assignables = [
-      'baseUrl',
-      'endpoint',
-      'collectionDataKey',
-      'collectionCountKey',
-      'authentication',
-      'schema',
-      'onValidationError',
-      'onFetchError'
-    ]
-    assignables.forEach(prop => {
-      if (has(options, prop)) {
-        this[prop] = options[prop]
-      }
-    })
+    mergeObject({ source: options, target: this })
 
     // Parse schema fields to set default values for each option
     if (this.schema) {
@@ -891,13 +877,6 @@ export default class Model {
         searchParams
       })
     } else {
-      typecheck({
-        pathname: {
-          type: 'string',
-          required: true
-        }
-      })
-
       await this.fetch({
         method: 'GET',
         pathname
