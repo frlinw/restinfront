@@ -11,8 +11,7 @@ import {
 } from 'utilib'
 
 
-const COLLECTION_SYMBOL = Symbol.for('collection')
-const COLLECTION_KEY = 'collection'
+const COLLECTION_KEY = Symbol.for('collection')
 
 export default class Model {
   static baseUrl = ''
@@ -26,7 +25,79 @@ export default class Model {
   static onFetchError = () => null
 
   /*****************************************************************
-  * Static: Public API
+  * Static helpers
+  *****************************************************************/
+
+  /**
+   * Define the callback for custom collection methods
+   */
+  static _getCollectionCallback (ref) {
+    if (isFunction(ref)) {
+      return ref
+    } else if (isString(ref)) {
+      return (item) => item[this.primaryKeyFieldname] === ref
+    } else if (isObject(ref)) {
+      return (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
+    }
+  }
+
+  /**
+   * Build an item based on the schema and filled with default values
+   * @param {object} item
+   * @returns {object}
+   */
+  static _buildRawItem (item = {}) {
+    const rawItem = {}
+
+    // Build the item with default values
+    const primaryKey = item['primaryKey'] || item[this.primaryKeyFieldname] || this.schema[this.primaryKeyFieldname].defaultValue()
+
+    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
+      if (fieldname === this.primaryKeyFieldname) {
+        rawItem[fieldname] = primaryKey
+      } else if (has(item, fieldname)) {
+        rawItem[fieldname] = item[fieldname]
+      } else {
+        rawItem[fieldname] = fieldconf.defaultValue(primaryKey) // primaryKey argument is necessary for HASONE fieldtype
+      }
+    }
+
+    return rawItem
+  }
+
+  /**
+   * Build a validator function for every declared fields
+   * @returns {object}
+   */
+  static _buildValidator () {
+    const validator = {}
+
+    // Build the base validator
+    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
+      validator[fieldname] = {
+        checked: fieldconf.autoChecked,
+        isValid: (value, data) => {
+          const isBlank = fieldconf.type.isBlank(value)
+
+          return (
+            (
+              // Blank and allowed
+              (isBlank && fieldconf.allowBlank(value, data)) ||
+              // Not blank and valid
+              (!isBlank && fieldconf.type.isValid(value))
+            ) &&
+            // Custom valid method
+            fieldconf.isValid(value, data)
+          )
+        }
+      }
+    }
+
+    return validator
+  }
+
+  /*****************************************************************
+  * Static public
   *****************************************************************/
 
   /**
@@ -129,113 +200,53 @@ export default class Model {
   }
 
   /*****************************************************************
-  * Data formating
+  * Instance helpers
+  *****************************************************************/
+
+  /*****************************************************************
+  * Instance Public API
   *****************************************************************/
 
   /**
-   * Define the callback for custom collection methods
-   */
-  static _getCollectionCallback (ref) {
-    if (isFunction(ref)) {
-      return ref
-    } else if (isString(ref)) {
-      return (item) => item[this.primaryKeyFieldname] === ref
-    } else if (isObject(ref)) {
-      return (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
-    }
-  }
-
-  /**
-   * Build an item based on the schema and filled with default values
-   * @param {object} item
-   * @returns {object}
-   */
-  static _buildRawItem (item = {}) {
-    const rawItem = {}
-
-    // Build the item with default values
-    const primaryKey = item['primaryKey'] || item[this.primaryKeyFieldname] || this.schema[this.primaryKeyFieldname].defaultValue()
-
-    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
-      if (fieldname === this.primaryKeyFieldname) {
-        rawItem[fieldname] = primaryKey
-      } else if (has(item, fieldname)) {
-        rawItem[fieldname] = item[fieldname]
-      } else {
-        rawItem[fieldname] = fieldconf.defaultValue(primaryKey) // primaryKey argument is necessary for HASONE fieldtype
-      }
-    }
-
-    return rawItem
-  }
-
-  /**
-   * Build a validator function for every declared fields
-   * @returns {object}
-   */
-  static _buildValidator () {
-    const validator = {}
-
-    // Build the base validator
-    for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
-      validator[fieldname] = {
-        checked: fieldconf.autoChecked,
-        isValid: (value, data) => {
-          const isBlank = fieldconf.type.isBlank(value)
-
-          return (
-            (
-              // Blank and allowed
-              (isBlank && fieldconf.allowBlank(value, data)) ||
-              // Not blank and valid
-              (!isBlank && fieldconf.type.isValid(value))
-            ) &&
-            // Custom valid method
-            fieldconf.isValid(value, data)
-          )
-        }
-      }
-    }
-
-    return validator
-  }
-
-  /**
-  * Build instance item
+  * Constructor
+  * @param {object|Array<object>} data
+  * @param {object} options
+  * @param {boolean} [options.isNew]
+  * @param {number} [options.count]
   */
   constructor (data, options = {}) {
-    this.$restinfront = {
-      fetch: {
-        options: null,
-        response: null
+    this.$fetch = {
+      options: null,
+      response: null
+    }
+    this.$state = {
+      inprogress: false,
+      success: false,
+      failure: false,
+      immutable: {
+        success: false
       },
-      state: {
-        progressing: false,
-        succeeded: false,
-        succeededOnce: false,
-        failed: false,
-        get: {
-          progressing: false,
-          succeeded: false,
-          failed: false
-        }
+      get: {
+        inprogress: false,
+        success: false,
+        failure: false
       }
     }
 
     // Format an item
     if (isObject(data)) {
       // Add single item specific properties
-      this.$restinfront.isNew = options.isNew ?? true
-      this.$restinfront.validator = this.constructor._buildValidator()
-      this.$restinfront.state.save = {
-        progressing: false,
-        succeeded: false,
-        failed: false
+      this.$isNew = options.isNew ?? true
+      this.$validator = this.constructor._buildValidator()
+      this.$state.save = {
+        inprogress: false,
+        success: false,
+        failure: false
       }
 
       // Build a raw item if it's a new instance
       if (
-        this.$restinfront.isNew &&
+        this.$isNew &&
         this.constructor.schema
       ) {
         data = this.constructor._buildRawItem(data)
@@ -250,17 +261,10 @@ export default class Model {
     // Format a collection of items
     } else if (isArray(data)) {
       // Add collection of items specific properties
-      this.$restinfront.count = 0
-
-      Object.defineProperty(this.$restinfront, COLLECTION_SYMBOL, {
-        value: true,
-        writable: false,
-        configurable: false,
-        enumerable: false
-      })
+      this.$count = 0
 
       // Add items to the list
-      this._setCollection([])
+      this[COLLECTION_KEY] = []
       for (const item of data) {
         this.add(item, options)
       }
@@ -268,27 +272,23 @@ export default class Model {
       // Update the count with the grand total
       // Note: must be after .add() processing
       if (has(options, 'count')) {
-        this.$restinfront.count = options.count
+        this.$count = options.count
       }
     }
 
     return this
   }
 
+  /*****************************************************************
+  * Instance helpers
+  *****************************************************************/
+
   /**
-   * Getters
+   * Utils to know if an instance is a collection
+   * @returns {boolean}
    */
-
   get isCollection () {
-    return COLLECTION_SYMBOL in this.$restinfront
-  }
-
-  get $isNew () {
-    return this.$restinfront.isNew
-  }
-
-  get $state () {
-    return this.$restinfront.states
+    return has(this, COLLECTION_KEY)
   }
 
   /**
@@ -311,47 +311,32 @@ export default class Model {
     }
   }
 
-  /**
-   * Set the list of items
-   * @param {Array<Model>} newCollection
-   * @returns {void}
-   */
-  _setCollection (newCollection) {
-    this[COLLECTION_KEY] = newCollection
-  }
+  /*****************************************************************
+  * Transform data
+  *****************************************************************/
 
   /**
-   * Update the current model instance with new data
-   * @param {Model} newData
-   * @returns {void}
+   * Format data recursively based on schema definition
+   * @param {object} options
+   * @param {boolean} [options.removeInvalid]
    */
-  _mutateData (newData) {
-    if (newData.isCollection) {
-      // Extend the list or just replace it
-      if (this.$restinfront.fetch.options?.extend) {
-        newData.forEach(newItem => this.add(newItem))
-      } else {
-        this._setCollection(newData.items())
-      }
+  _beforeSerializeItem (options = {}) {
+    const removeInvalid = options.removeInvalid ?? false
 
-      this.$restinfront.count = newData.$restinfront.count
-    } else {
-      for (const [key, value] of Object.entries(newData)) {
-        // Mutate only some keys
-        if (key === '$restinfront') {
-          this[key].isNew = value.isNew
-        // Recursive mutation
-        } else if (
-          this[key]?.$restinfront &&
-          value?.$restinfront
-        ) {
-          this[key]._mutateData(value)
-        // Basic fields
-        } else {
-          this[key] = value
-        }
+    const newItem = {}
+
+    for (const [fieldname, validator] of Object.entries(this.$validator)) {
+      const value = this[fieldname]
+
+      if (
+        !removeInvalid ||
+         (removeInvalid && validator.checked && validator.isValid(value, this))
+      ) {
+        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSerialize(value, options)
       }
     }
+
+    return newItem
   }
 
   /**
@@ -365,30 +350,6 @@ export default class Model {
     } else {
       return this._beforeSerializeItem(options)
     }
-  }
-
-  /**
-   * Format data recursively based on schema definition
-   * @param {object} options
-   * @param {boolean} [options.removeInvalid]
-   */
-  _beforeSerializeItem (options = {}) {
-    const removeInvalid = options.removeInvalid ?? false
-
-    const newItem = {}
-
-    for (const [fieldname, validator] of Object.entries(this.$restinfront.validator)) {
-      const value = this[fieldname]
-
-      if (
-        !removeInvalid ||
-        (removeInvalid && validator.checked && validator.isValid(value, this))
-      ) {
-        newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSerialize(value, options)
-      }
-    }
-
-    return newItem
   }
 
   /**
@@ -408,7 +369,7 @@ export default class Model {
   }
 
   /*****************************************************************
-  * Collection methods
+  * Proxy for native collection methods
   *****************************************************************/
 
   /**
@@ -425,36 +386,6 @@ export default class Model {
    */
   get length () {
     return this.items().length
-  }
-
-  /**
-   * Check if there are items in the collection
-   */
-  get isEmpty () {
-    return this.length === 0
-  }
-
-  /**
-   * The collection can be extended with more items
-   */
-  get hasMore () {
-    return this.length < this.$restinfront.count
-  }
-
-  /**
-   * Return the last item of the collection
-   */
-  get last () {
-    return this.items()[this.length - 1]
-  }
-
-  /**
-   * Check if an item is the last of the list
-   * @param {Object} ref - item (with the primary key) to check existence
-   * @returns {boolean}
-   */
-  isLast (ref) {
-    return this.last[this.constructor.primaryKeyFieldname] === ref[this.constructor.primaryKeyFieldname]
   }
 
   /**
@@ -523,6 +454,40 @@ export default class Model {
     return this.items().find(this.constructor._getCollectionCallback(ref)) || null
   }
 
+  /*****************************************************************
+  * Custom collection methods
+  *****************************************************************/
+
+  /**
+   * Check if there are items in the collection
+   */
+  get isEmpty () {
+    return this.length === 0
+  }
+
+  /**
+   * The collection can be extended with more items
+   */
+  get hasMore () {
+    return this.length < this.$count
+  }
+
+  /**
+   * Return the last item of the collection
+   */
+  get last () {
+    return this.items()[this.length - 1]
+  }
+
+  /**
+   * Check if an item is the last of the list
+   * @param {Object} ref - item (with the primary key) to check existence
+   * @returns {boolean}
+   */
+  isLast (ref) {
+    return this.last[this.constructor.primaryKeyFieldname] === ref[this.constructor.primaryKeyFieldname]
+  }
+
   /**
    * Remove all items from the collection
    */
@@ -553,14 +518,15 @@ export default class Model {
       return null
     }
 
-    this.$restinfront.count = this.$restinfront.count - 1
+    this.$count -= 1
 
     return this.items().splice(indexToRemove, 1)
   }
 
   /**
    * Add a new item to the collection
-   * @param {Object} options - optional definition of the item to add
+   * @param {object|Model} item - optional definition of the item to add
+   * @param {object} options - optional definition of the item to add
    * @returns {Model}
    */
   add (item = {}, options = {}) {
@@ -570,7 +536,7 @@ export default class Model {
 
     this.items().push(instance)
 
-    this.$restinfront.count = this.$restinfront.count + 1
+    this.$count += 1
 
     return instance
   }
@@ -609,9 +575,9 @@ export default class Model {
         const fieldname = fielditem
 
         if (has(this, fieldname)) {
-          this.$restinfront.validator[fieldname].checked = true
+          this.$validator[fieldname].checked = true
 
-          if (this.$restinfront.validator[fieldname].isValid(this[fieldname], this) === false) {
+          if (this.$validator[fieldname].isValid(this[fieldname], this) === false) {
             errors.set(fieldname, { value: this[fieldname], error: 'NOT_VALID' })
           }
         } else {
@@ -623,7 +589,7 @@ export default class Model {
         const fieldlist = fielditem[1]
 
         if (has(this, fieldname)) {
-          this.$restinfront.validator[fieldname].checked = true
+          this.$validator[fieldname].checked = true
           let associationErrors
 
           if (fieldlist) {
@@ -675,9 +641,9 @@ export default class Model {
     }
 
     // Reset save states
-    this.$restinfront.state.save.progressing = false
-    this.$restinfront.state.save.succeeded = false
-    this.$restinfront.state.save.failed = false
+    this.$state.save.inprogress = false
+    this.$state.save.success = false
+    this.$state.save.failure = false
     // Proceed to deep validation
     const errors = this._getValidationErrors(fieldlist)
     const isValid = errors.size === 0
@@ -696,14 +662,43 @@ export default class Model {
    */
   error (fieldname) {
     return (
-      this.$restinfront.validator[fieldname].checked &&
-      !this.$restinfront.validator[fieldname].isValid(this[fieldname], this)
+      this.$validator[fieldname].checked &&
+      !this.$validator[fieldname].isValid(this[fieldname], this)
     )
   }
 
   /*****************************************************************
   * HTTP
   *****************************************************************/
+
+  /**
+   * Update the current model instance with new data
+   * @param {Model} instance
+   * @returns {void}
+   */
+  _mutateData (instance) {
+    if (instance.isCollection) {
+      if (this.$fetch.options?.extend) {
+        instance.forEach(newItem => this.add(newItem))
+      } else {
+        this[COLLECTION_KEY] = instance.items()
+        this.$count = instance.$count
+      }
+    } else {
+      for (const [key, value] of Object.entries(instance)) {
+        // Recursive mutation
+        if (
+          has(this[key], '_mutateData') &&
+          has(value, '_mutateData')
+        ) {
+          this[key]._mutateData(value)
+        // Basic fields & $isNew
+        } else if (!['$fetch', '$state', '$validator'].includes(key)) {
+          this[key] = value
+        }
+      }
+    }
+  }
 
   /**
    * Build the request url to pass to the fetch method
@@ -779,22 +774,22 @@ export default class Model {
     }
 
     // Reset fetch memoization
-    this.$restinfront.fetch.options = options
-    this.$restinfront.fetch.response = null
+    this.$fetch.options = options
+    this.$fetch.response = null
 
     // Reset fetch states
-    this.$restinfront.state.progressing = true
-    this.$restinfront.state.failed = false
-    this.$restinfront.state.succeeded = false
+    this.$state.inprogress = true
+    this.$state.failure = false
+    this.$state.success = false
 
     if (options.method === 'GET') {
-      this.$restinfront.state.get.progressing = true
-      this.$restinfront.state.get.failed = false
-      this.$restinfront.state.get.succeeded = false
+      this.$state.get.inprogress = true
+      this.$state.get.failure = false
+      this.$state.get.success = false
     } else {
-      this.$restinfront.state.save.progressing = true
-      this.$restinfront.state.save.failed = false
-      this.$restinfront.state.save.succeeded = false
+      this.$state.save.inprogress = true
+      this.$state.save.failure = false
+      this.$state.save.success = false
     }
 
     // Build fetch params
@@ -811,39 +806,39 @@ export default class Model {
     try {
       // Proceed to api call
       // https://developer.mozilla.org/fr/docs/Web/API/Fetch_API
-      this.$restinfront.fetch.response = await fetch(requestUrl, requestInit)
+      this.$fetch.response = await fetch(requestUrl, requestInit)
 
       clearTimeout(abortTimeout)
 
       // Server side errors raise an exception
-      if (!this.$restinfront.fetch.response.ok) {
-        throw new RestinfrontError(`fetch: the server responded with an error status code (${this.$restinfront.fetch.response.status})`)
+      if (!this.$fetch.response.ok) {
+        throw new RestinfrontError(`fetch: the server responded with an error status code (${this.$fetch.response.status})`)
       }
 
       // Set states to success
-      this.$restinfront.state.succeeded = true
-      this.$restinfront.state.succeededOnce = true
+      this.$state.success = true
+      this.$state.successOnce = true
       if (options.method === 'GET') {
-        this.$restinfront.state.get.succeeded = true
+        this.$state.get.success = true
       } else {
-        this.$restinfront.state.save.succeeded = true
+        this.$state.save.success = true
       }
     } catch (error) {
-      this.constructor.onFetchError({ error, response: this.$restinfront.fetch.response })
+      this.constructor.onFetchError({ error, response: this.$fetch.response })
 
       // Set states to failure
-      this.$restinfront.state.failed = true
+      this.$state.failure = true
       if (options.method === 'GET') {
-        this.$restinfront.state.get.failed = true
+        this.$state.get.failure = true
       } else {
-        this.$restinfront.state.save.failed = true
+        this.$state.save.failure = true
       }
     }
 
     // Process server data if fetch is successful
-    if (this.$restinfront.state.succeeded) {
+    if (this.$state.success) {
       // Get data from server response
-      const serverData = await this.$restinfront.fetch.response.json()
+      const serverData = await this.$fetch.response.json()
 
       let data = serverData
       const dataOptions = {
@@ -862,11 +857,11 @@ export default class Model {
       this._mutateData(formattedData)
     }
 
-    // Progressing done
+    // inprogress done
     if (options.method === 'GET') {
-      this.$restinfront.state.get.progressing = false
+      this.$state.get.inprogress = false
     } else {
-      this.$restinfront.state.save.progressing = false
+      this.$state.save.inprogress = false
     }
   }
 
@@ -917,13 +912,13 @@ export default class Model {
   async getMore () {
     this._allowCollection()
 
-    this.$restinfront.fetch.options.searchParams.offset += this.$restinfront.fetch.options.searchParams.limit
+    this.$fetch.options.searchParams.offset += this.$fetch.options.searchParams.limit
 
     await this.fetch({
       extend: true,
       method: 'GET',
-      pathname: this.$restinfront.fetch.options.pathname,
-      searchParams: this.$restinfront.fetch.options.searchParams
+      pathname: this.$fetch.options.pathname,
+      searchParams: this.$fetch.options.searchParams
     })
   }
 
@@ -977,7 +972,7 @@ export default class Model {
   async save (pathname = '') {
     this._denyCollection()
 
-    if (this.$restinfront.isNew) {
+    if (this.$isNew) {
       await this.post(pathname)
     } else {
       await this.put(pathname)

@@ -165,23 +165,21 @@ export default {
     // .get(url: string)
     await this.plans.get()
     // Some flags are mutated during the fetch operation:
-    // this.plans.getProgressing
-    // this.plans.getSucceeded
-    // this.plans.getSucceededOnce
-    // this.plans.getFailed
+    // this.plans.$state.get.inprogress
+    // this.plans.$state.get.success
+    // this.plans.$state.get.failure    
 
     if (this.id) {
       // Get the existing user if there is an id in the URL
       // .get(url: string)
       await this.user.get(this.id)
       // Some flags are mutated during the fetch operation:
-      // this.user.getProgressing
-      // this.user.getSucceeded
-      // this.user.getSucceededOnce
-      // this.user.getFailed
-      // this.user.saveProgressing
-      // this.user.saveSucceeded
-      // this.user.saveFailed
+      // this.user.$state.get.inprogress
+      // this.user.$state.get.success
+      // this.user.$state.get.failure
+      // this.user.$state.save.inprogress
+      // this.user.$state.save.success
+      // this.user.$state.save.failure
     }
   },
 
@@ -210,7 +208,7 @@ export default {
         // .save() is a syntax sugar for .put() or .post()
         await this.user.save()
 
-        if (this.user.saveSucceeded) {
+        if (this.user.$state.save.success) {
           if (this.id) {
             console.log('Yeah! user updated !')
           } else {
@@ -275,7 +273,7 @@ export default {
       </div>
 
       <button type="submit">
-        <span v-if="user.saveProgressing">Save in progress</span>
+        <span v-if="user.$state.save.inprogress">Save in progress</span>
         <span v-else>Save</span>
       </button>
     </form>
