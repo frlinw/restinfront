@@ -82,9 +82,6 @@ export default class Model {
 
     // Parse schema fields to set default values for each option
     if (this.schema) {
-      // Clone the schema before mutating it
-      this.schema = structuredClone(this.schema)
-
       for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
         // Type is a required param
         if (!has(fieldconf, 'type')) {
