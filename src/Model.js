@@ -357,7 +357,7 @@ export default class Model {
    * @returns {string}
    */
   toJSON () {
-    return JSON.stringyfy(this.beforeSerialize())
+    return JSON.stringify(this.beforeSerialize())
   }
 
   /**
@@ -756,7 +756,7 @@ export default class Model {
 
     if (['POST', 'PUT', 'PATCH'].includes(requestInit.method)) {
       // Extract validated data only
-      requestInit.body = JSON.stringyfy(this.beforeSerialize({ removeInvalid: true }))
+      requestInit.body = JSON.stringify(this.beforeSerialize({ removeInvalid: true }))
     }
 
     return requestInit
