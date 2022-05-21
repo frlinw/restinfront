@@ -207,17 +207,17 @@ export default class Model {
     this.$restinfront = {
       fetch: {
         options: null,
-        response: null,
-        states: {
+        response: null
+      },
+      state: {
+        progressing: false,
+        succeeded: false,
+        succeededOnce: false,
+        failed: false,
+        get: {
           progressing: false,
           succeeded: false,
-          succeededOnce: false,
-          failed: false,
-          get: {
-            progressing: false,
-            succeeded: false,
-            failed: false
-          }
+          failed: false
         }
       }
     }
@@ -227,7 +227,7 @@ export default class Model {
       // Add single item specific properties
       this.$restinfront.isNew = options.isNew ?? true
       this.$restinfront.validator = this.constructor._buildValidator()
-      this.$restinfront.fetch.save = {
+      this.$restinfront.state.save = {
         progressing: false,
         succeeded: false,
         failed: false
@@ -283,12 +283,12 @@ export default class Model {
     return COLLECTION_SYMBOL in this.$restinfront
   }
 
-  get isNew () {
+  get $isNew () {
     return this.$restinfront.isNew
   }
 
-  get $fetch () {
-    return this.$restinfront.fetch.states
+  get $state () {
+    return this.$restinfront.states
   }
 
   /**
@@ -675,9 +675,9 @@ export default class Model {
     }
 
     // Reset save states
-    this.$restinfront.fetch.save.progressing = false
-    this.$restinfront.fetch.save.succeeded = false
-    this.$restinfront.fetch.save.failed = false
+    this.$restinfront.state.save.progressing = false
+    this.$restinfront.state.save.succeeded = false
+    this.$restinfront.state.save.failed = false
     // Proceed to deep validation
     const errors = this._getValidationErrors(fieldlist)
     const isValid = errors.size === 0
@@ -783,18 +783,18 @@ export default class Model {
     this.$restinfront.fetch.response = null
 
     // Reset fetch states
-    this.$restinfront.fetch.states.progressing = true
-    this.$restinfront.fetch.states.failed = false
-    this.$restinfront.fetch.states.succeeded = false
+    this.$restinfront.state.progressing = true
+    this.$restinfront.state.failed = false
+    this.$restinfront.state.succeeded = false
 
     if (options.method === 'GET') {
-      this.$restinfront.fetch.states.get.progressing = true
-      this.$restinfront.fetch.states.get.failed = false
-      this.$restinfront.fetch.states.get.succeeded = false
+      this.$restinfront.state.get.progressing = true
+      this.$restinfront.state.get.failed = false
+      this.$restinfront.state.get.succeeded = false
     } else {
-      this.$restinfront.fetch.states.save.progressing = true
-      this.$restinfront.fetch.states.save.failed = false
-      this.$restinfront.fetch.states.save.succeeded = false
+      this.$restinfront.state.save.progressing = true
+      this.$restinfront.state.save.failed = false
+      this.$restinfront.state.save.succeeded = false
     }
 
     // Build fetch params
@@ -821,27 +821,27 @@ export default class Model {
       }
 
       // Set states to success
-      this.$restinfront.fetch.states.succeeded = true
-      this.$restinfront.fetch.states.succeededOnce = true
+      this.$restinfront.state.succeeded = true
+      this.$restinfront.state.succeededOnce = true
       if (options.method === 'GET') {
-        this.$restinfront.fetch.states.get.succeeded = true
+        this.$restinfront.state.get.succeeded = true
       } else {
-        this.$restinfront.fetch.states.save.succeeded = true
+        this.$restinfront.state.save.succeeded = true
       }
     } catch (error) {
       this.constructor.onFetchError({ error, response: this.$restinfront.fetch.response })
 
       // Set states to failure
-      this.$restinfront.fetch.states.failed = true
+      this.$restinfront.state.failed = true
       if (options.method === 'GET') {
-        this.$restinfront.fetch.states.get.failed = true
+        this.$restinfront.state.get.failed = true
       } else {
-        this.$restinfront.fetch.states.save.failed = true
+        this.$restinfront.state.save.failed = true
       }
     }
 
     // Process server data if fetch is successful
-    if (this.$restinfront.fetch.states.succeeded) {
+    if (this.$restinfront.state.succeeded) {
       // Get data from server response
       const serverData = await this.$restinfront.fetch.response.json()
 
@@ -864,9 +864,9 @@ export default class Model {
 
     // Progressing done
     if (options.method === 'GET') {
-      this.$restinfront.fetch.states.get.progressing = false
+      this.$restinfront.state.get.progressing = false
     } else {
-      this.$restinfront.fetch.states.save.progressing = false
+      this.$restinfront.state.save.progressing = false
     }
   }
 
