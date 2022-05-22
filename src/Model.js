@@ -9,7 +9,7 @@ import {
   joinPaths,
   mergeObject,
   typecheck
-} from 'utilib'
+} from 'utililib'
 
 
 const COLLECTION_KEY = Symbol.for('collection')

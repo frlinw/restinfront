@@ -19,7 +19,7 @@ import {
   parseDate,
   prependZero,
   typecheck
-} from 'utilib'
+} from 'utililib'
 
 
 const FIELDTYPES_PRESETS = {

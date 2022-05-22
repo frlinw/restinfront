@@ -22,7 +22,7 @@
     "lint": "eslint --fix src/**/*.js"
   },
   "dependencies": {
-    "utilib": "github:madmoizo/utilib"
+    "utililib": "github:madmoizo/utililib"
   },
   "devDependencies": {
     "eslint": "^8.16.0",
