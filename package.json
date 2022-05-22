@@ -1,6 +1,6 @@
 {
   "name": "restinfront",
-  "version": "3.1.5",
+  "version": "3.1.6",
   "description": "Model based REST Api Manager",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
@@ -16,8 +16,8 @@
     "type": "git",
     "url": "git://github.com/madmoizo/restinfront.git"
   },
+  "type": "module",
   "main": "index.js",
-  "module": "index.js",
   "scripts": {
     "lint": "eslint --fix src/**/*.js"
   },
