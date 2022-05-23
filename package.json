@@ -19,7 +19,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "lint": "eslint --fix src/**/*.js"
+    "lint": "eslint --fix src/**/*.js",
+    "postversion": "git push && git push --follow-tags"
   },
   "dependencies": {
     "utililib": "github:madmoizo/utililib"
