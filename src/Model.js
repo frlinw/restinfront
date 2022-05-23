@@ -116,21 +116,18 @@ export default class Model {
    */
   static init (options = {}) {
     typecheck({
-      error: RestinfrontError,
-      params: {
-        options: {
-          value: options,
-          type: ['object', {
-            baseUrl: { type: 'string' },
-            endpoint: { type: 'string' },
-            collectionDataKey: { type: 'string' },
-            collectionCountKey: { type: 'string' },
-            authentication: { type: ['function', 'false'] },
-            schema: { type: ['object', 'false'] },
-            onValidationError: { type: 'function' },
-            onFetchError: { type: 'function' }
-          }]
-        }
+      options: {
+        value: options,
+        type: ['object', {
+          baseUrl: { type: 'string' },
+          endpoint: { type: 'string' },
+          collectionDataKey: { type: 'string' },
+          collectionCountKey: { type: 'string' },
+          authentication: { type: ['function', 'false'] },
+          schema: { type: ['object', 'false'] },
+          onValidationError: { type: 'function' },
+          onFetchError: { type: 'function' }
+        }]
       }
     })
 
@@ -143,10 +140,19 @@ export default class Model {
     // Parse schema fields to set default values for each option
     if (this.schema) {
       for (const [fieldname, fieldconf] of Object.entries(this.schema)) {
-        // Type is a required param
-        if (!has(fieldconf, 'type')) {
-          throw new RestinfrontError(`\`type\` field attribute is required on \`${fieldname}\` field of ${this.name} model`)
-        }
+        typecheck({
+          [`schema.${fieldname}`]: {
+            value: fieldconf,
+            type: ['object', {
+              type: { type: ['object', 'function'], required: true },
+              primaryKey: { type: 'boolean' },
+              // defaultValue: { type: }, no need to check, can be any type
+              allowBlank: { type: ['function', 'boolean'] },
+              isValid: { type: ['function'] },
+              autoChecked: { type: ['boolean'] }
+            }]
+          }
+        })
 
         // Set the primary key
         if (fieldconf.primaryKey) {
@@ -189,11 +195,7 @@ export default class Model {
   }
 
   /*****************************************************************
-  * Instance helpers
-  *****************************************************************/
-
-  /*****************************************************************
-  * Instance Public API
+  * Constructor
   *****************************************************************/
 
   /**
@@ -269,7 +271,7 @@ export default class Model {
   }
 
   /*****************************************************************
-  * Instance helpers
+  * Instance global helpers
   *****************************************************************/
 
   /**
