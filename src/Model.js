@@ -146,7 +146,7 @@ export default class Model {
             type: ['object', {
               type: { type: ['object', 'function'], required: true },
               primaryKey: { type: 'boolean' },
-              // defaultValue: { type: }, no need to check, can be any type
+              defaultValue: { type: 'any' },
               allowBlank: { type: ['function', 'boolean'] },
               isValid: { type: ['function'] },
               autoChecked: { type: ['boolean'] }
