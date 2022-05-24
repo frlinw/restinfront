@@ -761,7 +761,7 @@ export default class Model {
    */
   async fetch (options) {
     if (!this.constructor.endpoint) {
-      throw new RestinfrontError(`fetch: an \`endpoint\` is required on model \`${this.constructor.name}\` to perform a request`)
+      throw new RestinfrontError(`fetch: \`endpoint\` option is required on model \`${this.constructor.name}\` to perform a request`)
     }
 
     // Reset fetch memoization
@@ -772,7 +772,6 @@ export default class Model {
     this.$state.inprogress = true
     this.$state.failure = false
     this.$state.success = false
-
     if (options.method === 'GET') {
       this.$state.get.inprogress = true
       this.$state.get.failure = false
@@ -807,8 +806,8 @@ export default class Model {
       }
 
       // Set states to success
+      this.$state.immutable.success = true
       this.$state.success = true
-      this.$state.successOnce = true
       if (options.method === 'GET') {
         this.$state.get.success = true
       } else {
@@ -829,26 +828,25 @@ export default class Model {
     // Process server data if fetch is successful
     if (this.$state.success) {
       // Get data from server response
-      const serverData = await this.$fetch.response.json()
+      let data = await this.$fetch.response.json()
 
-      let data = serverData
       const dataOptions = {
         isNew: false
       }
 
       if (
-        has(serverData, this.collectionCountKey) &&
-        has(serverData, this.collectionDataKey)
+        has(data, this.constructor.collectionCountKey) &&
+        has(data, this.constructor.collectionDataKey)
       ) {
-        data = serverData[this.constructor.collectionDataKey]
-        dataOptions.count = serverData[this.constructor.collectionCountKey]
+        dataOptions.count = data[this.constructor.collectionCountKey]
+        data = data[this.constructor.collectionDataKey]
       }
 
-      const formattedData = new this.constructor(data, dataOptions)
-      this._mutateData(formattedData)
+      this._mutateData(new this.constructor(data, dataOptions))
     }
 
     // inprogress done
+    this.$state.inprogress = true
     if (options.method === 'GET') {
       this.$state.get.inprogress = false
     } else {
