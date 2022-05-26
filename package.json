@@ -1,6 +1,6 @@
 {
   "name": "restinfront",
-  "version": "3.2.4",
+  "version": "3.2.5",
   "description": "Model based REST Api Manager",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
