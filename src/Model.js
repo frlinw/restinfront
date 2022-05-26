@@ -2,12 +2,12 @@ import RestinfrontError from './RestinfrontError.js'
 import {
   has,
   isArray,
-  isDate,
   isFunction,
   isObject,
   isString,
   joinPaths,
   mergeObject,
+  stringifySearchParams,
   typecheck
 } from 'utililib'
 
@@ -692,33 +692,6 @@ export default class Model {
   }
 
   /**
-   * Build the request url to pass to the fetch method
-   * @param {object} options
-   * @param {string} options.pathname
-   * @param {object} options.searchParams
-   * @returns {string}
-   */
-  _buildRequestUrl ({ pathname, searchParams }) {
-    let requestUrl = joinPaths(this.constructor.baseUrl, this.constructor.endpoint, pathname)
-
-    if (searchParams) {
-      requestUrl += `?${
-        Object.entries(searchParams)
-          .filter(([key, value]) => value !== undefined)
-          .map(([key, value]) => {
-            if (isDate(value)) {
-              value = value.toISOString()
-            }
-            return `${key}=${encodeURIComponent(value)}`
-          })
-          .join('&')
-      }`
-    }
-
-    return requestUrl
-  }
-
-  /**
    * Build the request init to pass to the fetch method
    * @param {object} options
    * @param {string} options.method
@@ -784,7 +757,7 @@ export default class Model {
 
     // Build fetch params
     const abortController = new AbortController()
-    const requestUrl = this._buildRequestUrl(options)
+    const requestUrl = `${joinPaths(this.constructor.baseUrl, this.constructor.endpoint, options.pathname)}${stringifySearchParams(options.searchParams)}`
     const requestInit = await this._buildRequestInit({
       method: options.method,
       signal: abortController.signal
