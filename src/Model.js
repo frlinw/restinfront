@@ -37,7 +37,7 @@ export default class Model {
       return ref
     } else if (isString(ref)) {
       return (item) => item[this.primaryKeyFieldname] === ref
-    } else if (isObject(ref)) {
+    } else {
       return (item) => item[this.primaryKeyFieldname] === ref[this.primaryKeyFieldname]
     }
   }
