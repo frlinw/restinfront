@@ -1,16 +1,15 @@
 {
   "name": "restinfront",
   "version": "3.2.6",
-  "description": "Model based REST Api Manager",
+  "description": "A REST Api Manager for your frontend",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
   "keywords": [
     "model",
     "rest",
-    "api",
-    "valid",
-    "parse",
-    "transform"
+    "form",
+    "validation",
+    "fetch"
   ],
   "repository": {
     "type": "git",
