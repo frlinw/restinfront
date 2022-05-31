@@ -1,10 +1,23 @@
-# OS generated files
-.DS_Store*
-ehthumbs.db
-Thumbs.db
+# VSCode
 .vscode
-.idea
 
-# NPM
-npm-debug.log
-node_modules
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# NPM cache
+.npm/
+# NPM installed packages
+node_modules/
+# NPM lock file
+package-lock.json
+# Output of 'npm pack'
+*.tgz
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional eslint cache
+.eslintcache
+
