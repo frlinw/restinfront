@@ -29,6 +29,6 @@
     "eslint-plugin-promise": "^6.0.0"
   },
   "dependencies": {
-    "utililib": "^1.9.0"
+    "utililib": "^1.12.0"
   }
 }
