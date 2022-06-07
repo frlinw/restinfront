@@ -22,13 +22,14 @@
     "postversion": "git push && git push --follow-tags"
   },
   "devDependencies": {
-    "eslint": "^8.16.0",
+    "eslint": "^8.17.0",
     "eslint-config-standard": "^17.0.0",
     "eslint-plugin-import": "^2.25.4",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^6.0.0"
+    "eslint-plugin-promise": "^6.0.0",
+    "typescript": "^4.7.3"
   },
   "dependencies": {
-    "utililib": "^1.8.1"
+    "utililib": "^1.12.0"
   }
 }
