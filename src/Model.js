@@ -321,7 +321,7 @@ export default class Model {
 
       if (
         !removeInvalid ||
-         (removeInvalid && validator.checked && validator.isValid(value, this))
+        (removeInvalid && validator.checked && validator.isValid(value, this))
       ) {
         newItem[fieldname] = this.constructor.schema[fieldname].type.beforeSerialize(value, options)
       }
@@ -730,6 +730,8 @@ export default class Model {
    * Proceed to the HTTP request
    * @param {object} options
    * @param {GET|POST|PUT|PATCH|DELETE} options.method
+   * @param {string} [options.pathname]
+   * @param {object} [options.searchParams]
    * @returns {Promise<Model>}
    */
   async fetch (options) {
