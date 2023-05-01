@@ -9,7 +9,7 @@ import {
   mergeObject,
   stringifySearchParams,
   typecheck
-} from 'utililib'
+} from 'bibliotech'
 
 
 const COLLECTION_KEY = Symbol.for('collection')
