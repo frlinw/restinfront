@@ -554,7 +554,7 @@ export default class Model {
   /**
    * Valid a list of fields
    * @param {Array<string>} fieldlist list of fieldname
-   * @return {object} errors
+   * @returns {object} errors
    */
   _getValidationErrors (fieldlist) {
     const errors = new Map()
@@ -622,7 +622,7 @@ export default class Model {
   /**
    * Valid a list of fields
    * @param {Array<string>} fieldlist list of fieldname
-   * @return {boolean} result of fields validation
+   * @returns {boolean} result of fields validation
    */
   valid (fieldlist) {
     this._denyCollection()
