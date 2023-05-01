@@ -1,6 +1,6 @@
 {
   "name": "restinfront",
-  "version": "3.2.6",
+  "version": "4.0.0",
   "description": "A REST Api Manager for your frontend",
   "author": "Matthieu Dambrune <matthieu.dambrune@gmail.com>",
   "license": "ISC",
